@@ -25,11 +25,11 @@ function calculateSmartQuestionScore(question: string): number {
     /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/gi;
 
   // Base points for attempting a question
-  score += 5;
+  score += 10;
 
   // URL presence and validity (40 points)
   if (urlPattern.test(question)) {
-    score += 20;
+    score += 50;
     // Bonus for valid domain extensions
     if (/\.(com|org|edu|gov|net)/.test(question)) score += 5;
   }
@@ -50,7 +50,7 @@ function calculateSmartQuestionScore(question: string): number {
   if (
     specificityMarkers.some(marker => question.toLowerCase().includes(marker))
   ) {
-    score += 25;
+    score += 20;
   }
 
   // Question length and detail (20 points)
