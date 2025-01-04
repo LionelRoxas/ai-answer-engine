@@ -261,7 +261,7 @@ export default function Home() {
 
   // Rest of your component remains exactly the same from here on
   return (
-    <div className="flex h-screen bg-[#0000000]">
+    <div className="flex h-screen bg-[#00008B]">
       {/* Sidebar */}
       <div className="w-60 bg-black border-r border-blue-900/30 flex flex-col bg-gradient-to-r from-gray-900 to-black p-2 backdrop-blur-lg shadow-md">
         <div className="p-1.5">
