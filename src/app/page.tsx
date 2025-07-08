@@ -57,16 +57,55 @@ export default function UHCCPortalSupport() {
   const [error, setError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [messagesSent, setMessagesSent] = useState(0);
+  const [latestOptionsMessageIndex, setLatestOptionsMessageIndex] = useState<
+    number | null
+  >(null);
 
   const [rateLimitInfo, setRateLimitInfo] = useState<{
     remaining?: number;
     limit?: number;
+    reset?: number;
   }>({});
 
   // Scroll to bottom function
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  // Create a reusable function to fetch rate limit status
+  const fetchRateLimitStatus = async () => {
+    try {
+      const response = await fetch("/api/rate-limit-status");
+      const limit = response.headers.get("X-RateLimit-Limit");
+      const remaining = response.headers.get("X-RateLimit-Remaining");
+      const reset = response.headers.get("X-RateLimit-Reset");
+
+      if (limit && remaining) {
+        setRateLimitInfo({
+          limit: parseInt(limit),
+          remaining: parseInt(remaining),
+          reset: reset ? parseInt(reset) : undefined,
+        });
+      }
+    } catch (error) {
+      console.log("Could not fetch rate limit status:", error);
+    }
+  };
+
+  // useEffect for initial rate limit fetch (runs once)
+  useEffect(() => {
+    fetchRateLimitStatus();
+  }, []);
+
+  // useEffect for periodic updates (runs every 30 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchRateLimitStatus();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -151,12 +190,13 @@ export default function UHCCPortalSupport() {
     };
     setChats(prev => [newChat, ...prev]);
     setCurrentChat(newChat);
-    setShowChat(false); // Start back at selection screen
+    setShowChat(false);
+    setMessagesSent(0); // Reset message counter
+    setLatestOptionsMessageIndex(null); // Reset options tracking
   };
 
   const handleQuickAction = (action: QuickAction) => {
     setShowChat(true);
-    // Send the initial message which will get the first AI response with guided options
     setTimeout(() => handleSend(action.action), 100);
   };
 
@@ -169,11 +209,13 @@ export default function UHCCPortalSupport() {
     if (!messageToSend.trim()) return;
     setError(null);
 
+    // Increment message counter
+    setMessagesSent(prev => prev + 1);
+
     // Add user message to UI immediately
     const userMessage = { role: "user" as const, content: messageToSend };
     const updatedMessages = [...currentChat.messages, userMessage];
 
-    // Generate title from first user message
     const title =
       currentChat.messages.length === 0
         ? messageToSend.slice(0, 30) + (messageToSend.length > 30 ? "..." : "")
@@ -203,17 +245,6 @@ export default function UHCCPortalSupport() {
         }),
       });
 
-      // Capture rate limit headers from response
-      const limit = response.headers.get("X-RateLimit-Limit");
-      const remaining = response.headers.get("X-RateLimit-Remaining");
-
-      if (limit && remaining) {
-        setRateLimitInfo({
-          limit: parseInt(limit),
-          remaining: parseInt(remaining),
-        });
-      }
-
       // Handle rate limiting
       if (response.status === 429) {
         const rateLimitData = await response.json();
@@ -223,9 +254,10 @@ export default function UHCCPortalSupport() {
           `Please slow down! You can send another message in ${waitTime} seconds.`
         );
 
-        // Optional: Auto-retry after the wait time
+        // Refresh rate limit after wait time
         setTimeout(() => {
           setError(null);
+          fetchRateLimitStatus();
         }, waitTime * 1000);
 
         return;
@@ -237,7 +269,7 @@ export default function UHCCPortalSupport() {
 
       const data = await response.json();
 
-      // Add assistant's response with options from backend
+      // Add assistant's response
       const assistantMessage = {
         role: "assistant" as const,
         content: data.message,
@@ -246,7 +278,6 @@ export default function UHCCPortalSupport() {
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];
-
       const finalChat = {
         ...updatedChat,
         messages: finalMessages,
@@ -256,6 +287,14 @@ export default function UHCCPortalSupport() {
       setChats(prev =>
         prev.map(chat => (chat.id === currentChat.id ? finalChat : chat))
       );
+
+      // After successful message, refresh rate limit info
+      fetchRateLimitStatus();
+
+      // Update latest options message index if the response has options
+      if (data.options && data.options.length > 0) {
+        setLatestOptionsMessageIndex(finalMessages.length - 1);
+      }
     } catch (error) {
       console.error("Error:", error);
       setError("Connection failed. Please try again.");
@@ -270,28 +309,27 @@ export default function UHCCPortalSupport() {
   }: {
     remaining?: number;
     limit?: number;
+    reset?: number;
   }) => {
-    if (typeof remaining !== "number" || typeof limit !== "number") return null;
-
-    const percentage = (remaining / limit) * 100;
-    let status = "Good";
-    let color = "bg-green-400";
-    if (percentage < 20) {
-      status = "Low";
-      color = "bg-red-400";
-    } else if (percentage < 50) {
-      status = "Moderate";
-      color = "bg-yellow-400";
+    // Don't show anything until we have data from first API call
+    if (typeof remaining !== "number" || typeof limit !== "number") {
+      return (
+        <div className="flex items-center gap-2 text-sm text-white/90">
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+            <span className="text-xs">{messagesSent} messages sent</span>
+          </div>
+        </div>
+      );
     }
+
+    const color = "bg-green-400";
 
     return (
       <div className="flex items-center gap-2 text-sm text-white/90">
         <div className="flex items-center gap-1">
           <div className={`w-2 h-2 rounded-full ${color}`}></div>
-          <span className="text-xs">
-            {remaining} of {limit} messages left
-          </span>
-          <span className="text-xs ml-2">({status} - resets every minute)</span>
+          <span className="text-xs">{messagesSent} messages sent</span>
         </div>
       </div>
     );
@@ -375,7 +413,7 @@ export default function UHCCPortalSupport() {
   );
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-amber-50 to-orange-50">
+    <div className="flex h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
       {/* Sidebar - only show if chat is active */}
       {showChat && (
         <div className="w-80 bg-white border-r border-amber-200 flex flex-col shadow-lg">
@@ -466,12 +504,11 @@ export default function UHCCPortalSupport() {
                 background: "#CA5C13",
                 backgroundImage: "url('/images/UHCC-Hawaiian-logo.png')",
                 backgroundRepeat: "no-repeat",
-                backgroundPosition: "10px center", // shifted right by 30px
+                backgroundPosition: "10px center",
                 backgroundSize: "auto 70%",
               }}
             >
               <div className="flex items-center justify-between">
-                {/* Hide the img, since it's now a background */}
                 <div className="flex-1" />
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
@@ -701,17 +738,17 @@ export default function UHCCPortalSupport() {
                 background: "#CA5C13",
                 backgroundImage: "url('/images/UHCC-Hawaiian-logo.png')",
                 backgroundRepeat: "no-repeat",
-                backgroundPosition: "10px center", // shifted right by 30px
+                backgroundPosition: "10px center",
                 backgroundSize: "auto 70%",
               }}
             >
               <div className="flex items-center justify-between">
-                {/* Hide the img, since it's now a background */}
                 <div className="flex-1" />
                 <div className="flex items-center gap-4">
                   <RateLimitIndicator
                     remaining={rateLimitInfo.remaining}
                     limit={rateLimitInfo.limit}
+                    reset={rateLimitInfo.reset}
                   />
                 </div>
               </div>
@@ -731,7 +768,7 @@ export default function UHCCPortalSupport() {
                     <div
                       className={`max-w-[80%] p-4 rounded-lg ${
                         msg.role === "assistant"
-                          ? "bg-white border border-amber-200 shadow-sm"
+                          ? "bg-white border border-amber-200 shadow-sm text-gray-900"
                           : "bg-amber-600 text-white"
                       }`}
                     >
@@ -746,69 +783,74 @@ export default function UHCCPortalSupport() {
                   </div>
 
                   {/* Backend-Generated Options */}
-                  {msg.role === "assistant" && msg.options && (
-                    <div className="ml-11 mt-4 space-y-2">
-                      <p className="text-sm text-gray-600 mb-3">
-                        Choose what applies to you:
-                      </p>
-                      {msg.options.map(option => (
+                  {msg.role === "assistant" &&
+                    msg.options &&
+                    index === latestOptionsMessageIndex && (
+                      <div className="ml-11 mt-4 space-y-2">
+                        <p className="text-sm text-gray-600 mb-3">
+                          Choose what applies to you:
+                        </p>
+                        {msg.options.map(option => (
+                          <button
+                            key={option.id}
+                            onClick={() => handleOptionSelect(option)}
+                            className={`w-full text-left p-3 rounded-lg border ${option.color || "bg-gray-50 border-gray-200 hover:border-gray-400"} transition-all duration-200 hover:shadow-md text-gray-900`}
+                          >
+                            {option.text}
+                          </button>
+                        ))}
                         <button
-                          key={option.id}
-                          onClick={() => handleOptionSelect(option)}
-                          className={`w-full text-left p-3 rounded-lg border ${option.color || "bg-gray-50 border-gray-200 hover:border-gray-400"} transition-all duration-200 hover:shadow-md`}
+                          onClick={() => {
+                            const lastMessage =
+                              currentChat.messages[
+                                currentChat.messages.length - 1
+                              ];
+                            if (lastMessage.role === "assistant") {
+                              lastMessage.showInput = true;
+                              lastMessage.options = undefined;
+                              setCurrentChat({ ...currentChat });
+                              setLatestOptionsMessageIndex(null); // Hide options when switching to input
+                            }
+                          }}
+                          className="w-full text-left p-3 rounded-lg border border-gray-300 bg-gray-50 hover:border-gray-400 transition-all duration-200 text-gray-600 flex items-center gap-2"
                         >
-                          {option.text}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          const lastMessage =
-                            currentChat.messages[
-                              currentChat.messages.length - 1
-                            ];
-                          if (lastMessage.role === "assistant") {
-                            lastMessage.showInput = true;
-                            lastMessage.options = undefined;
-                            setCurrentChat({ ...currentChat });
-                          }
-                        }}
-                        className="w-full text-left p-3 rounded-lg border border-gray-300 bg-gray-50 hover:border-gray-400 transition-all duration-200 text-gray-600 flex items-center gap-2"
-                      >
-                        <MessageCircleIcon size={16} />
-                        None of these match - let me type my own response
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Free Input */}
-                  {msg.role === "assistant" && msg.showInput && (
-                    <div className="ml-11 mt-4">
-                      <div className="flex gap-3 items-end">
-                        <div className="flex-1">
-                          <textarea
-                            value={message}
-                            onChange={e => setMessage(e.target.value)}
-                            onKeyPress={e => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend();
-                              }
-                            }}
-                            placeholder="Describe exactly what you see or what's happening..."
-                            className="w-full rounded-lg border border-amber-300 p-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
-                            rows={3}
-                          />
-                        </div>
-                        <button
-                          onClick={() => handleSend()}
-                          disabled={isLoading || !message.trim()}
-                          className="bg-amber-600 text-white p-3 rounded-lg hover:bg-amber-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0"
-                        >
-                          <SendIcon size={16} />
+                          <MessageCircleIcon size={16} />
+                          None of these match - let me type my own response
                         </button>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                  {/* Free Input */}
+                  {msg.role === "assistant" &&
+                    msg.showInput &&
+                    index === currentChat.messages.length - 1 && (
+                      <div className="ml-11 mt-4">
+                        <div className="flex gap-3 items-end">
+                          <div className="flex-1">
+                            <textarea
+                              value={message}
+                              onChange={e => setMessage(e.target.value)}
+                              onKeyPress={e => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleSend();
+                                }
+                              }}
+                              placeholder="Describe exactly what you see or what's happening..."
+                              className="w-full rounded-lg border border-amber-300 p-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none text-gray-900"
+                              rows={3}
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleSend()}
+                            disabled={isLoading || !message.trim()}
+                            className="bg-amber-600 text-white p-3 rounded-lg hover:bg-amber-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0"
+                          >
+                            <SendIcon size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                 </div>
               ))}
 
@@ -845,18 +887,16 @@ export default function UHCCPortalSupport() {
                         : "bg-red-50 border-red-200 text-red-700"
                     } border px-4 py-3 rounded-lg max-w-md`}
                   >
-                    {
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-4 h-4 rounded-full flex-shrink-0 ${
-                            error.includes("slow down")
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                          }`}
-                        ></div>
-                        {error}
-                      </div>
-                    }
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-4 h-4 rounded-full flex-shrink-0 ${
+                          error.includes("slow down")
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
+                        }`}
+                      ></div>
+                      {error}
+                    </div>
                   </div>
                 </div>
               )}

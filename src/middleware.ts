@@ -25,14 +25,12 @@ const apiRateLimit = new Ratelimit({
 
 export async function middleware(request: NextRequest) {
   try {
-    // Better IP detection for various proxy setups
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0] ??
       request.headers.get("x-real-ip") ??
       request.headers.get("cf-connecting-ip") ??
       "127.0.0.1";
 
-    // Skip rate limiting for static assets and certain paths
     const skipPaths = [
       "/favicon.ico",
       "/robots.txt",
@@ -50,7 +48,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // Use different rate limits for API vs regular pages
     const isApiRoute = request.nextUrl.pathname.startsWith("/api/");
     const currentRateLimit = isApiRoute ? apiRateLimit : rateLimit;
 
@@ -71,7 +68,7 @@ export async function middleware(request: NextRequest) {
           { status: 429 }
         );
 
-    // Add rate limit headers
+    // ALWAYS add rate limit headers, not just on failures
     response.headers.set("X-RateLimit-Limit", limit.toString());
     response.headers.set("X-RateLimit-Remaining", remaining.toString());
     response.headers.set("X-RateLimit-Reset", reset.toString());
@@ -86,7 +83,6 @@ export async function middleware(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Error in middleware:", error);
-    // Allow requests through if Redis is down
     return NextResponse.next();
   }
 }
