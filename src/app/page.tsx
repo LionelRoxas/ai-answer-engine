@@ -382,7 +382,7 @@ export default function UHCCPortalSupport() {
           <div className="p-4 border-b border-amber-200">
             <div className="flex items-center gap-3 mb-4">
               <img
-                src="/images/uhcc-logo.jpg"
+                src="/images/uhcc-logo-3.png"
                 alt="UHCC Logo"
                 width={40}
                 className="object-contain"
@@ -461,16 +461,18 @@ export default function UHCCPortalSupport() {
           <div className="flex-1 overflow-y-auto bg-gradient-to-br from-amber-50 to-orange-50">
             {/* Header with orange background matching UHCC */}
             <header
-              className="p-4 shadow-lg text-white border-b border-black"
-              style={{ background: "#CA5C13" }}
+              className="p-4 shadow-lg text-white border-b border-black relative"
+              style={{
+                background: "#CA5C13",
+                backgroundImage: "url('/images/UHCC-Hawaiian-logo.png')",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "10px center", // shifted right by 30px
+                backgroundSize: "auto 70%",
+              }}
             >
               <div className="flex items-center justify-between">
-                <img
-                  src="/images/uhcc-logo-2.png"
-                  alt="UHCC Logo"
-                  width={30}
-                  className="object-contain"
-                />
+                {/* Hide the img, since it's now a background */}
+                <div className="flex-1" />
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   Help Available
@@ -694,16 +696,18 @@ export default function UHCCPortalSupport() {
           <>
             {/* Header with orange background matching UHCC */}
             <header
-              className="p-4 shadow-lg text-white border-b border-black"
-              style={{ background: "#CA5C13" }}
+              className="p-4 shadow-lg text-white border-b border-black relative"
+              style={{
+                background: "#CA5C13",
+                backgroundImage: "url('/images/UHCC-Hawaiian-logo.png')",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "10px center", // shifted right by 30px
+                backgroundSize: "auto 70%",
+              }}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <RateLimitIndicator
-                    remaining={rateLimitInfo.remaining}
-                    limit={rateLimitInfo.limit}
-                  />
-                </div>
+                {/* Hide the img, since it's now a background */}
+                <div className="flex-1" />
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   Help Available
