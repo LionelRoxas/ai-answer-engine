@@ -708,9 +708,11 @@ export default function UHCCPortalSupport() {
               <div className="flex items-center justify-between">
                 {/* Hide the img, since it's now a background */}
                 <div className="flex-1" />
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  Help Available
+                <div className="flex items-center gap-4">
+                  <RateLimitIndicator
+                    remaining={rateLimitInfo.remaining}
+                    limit={rateLimitInfo.limit}
+                  />
                 </div>
               </div>
             </header>
