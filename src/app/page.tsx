@@ -1,12 +1,30 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState, useEffect } from "react";
-import { PlusIcon, BrainIcon, SendIcon } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  PlusIcon,
+  HeadphonesIcon,
+  SendIcon,
+  ExternalLinkIcon,
+  AlertCircleIcon,
+  CheckCircleIcon,
+  ArrowRightIcon,
+  MessageCircleIcon,
+} from "lucide-react";
 
 type Message = {
   role: "user" | "assistant";
   content: string;
+  options?: Option[];
+  showInput?: boolean;
+};
+
+type Option = {
+  id: string;
+  text: string;
+  action: string;
+  color?: string;
 };
 
 type Chat = {
@@ -14,113 +32,87 @@ type Chat = {
   title: string;
   messages: Message[];
   createdAt: Date;
-  suggestedQueries?: string[];
+  currentStep: string;
 };
 
-function calculateSmartQuestionScore(question: string): number {
-  if (!question.trim()) return 0;
+type QuickAction = {
+  title: string;
+  description: string;
+  action: string;
+  icon: React.ReactNode;
+  color: string;
+};
 
-  let score = 0;
-  const urlPattern =
-    /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/gi;
-
-  // Base points for attempting a question
-  score += 10;
-
-  // URL presence and validity (40 points)
-  if (urlPattern.test(question)) {
-    score += 50;
-    // Bonus for valid domain extensions
-    if (/\.(com|org|edu|gov|net)/.test(question)) score += 5;
-  }
-
-  // Question specificity (25 points)
-  const specificityMarkers = [
-    "what",
-    "why",
-    "how",
-    "analyze",
-    "explain",
-    "compare",
-    "critique",
-    "evaluate",
-    "assess",
-    "examine",
-  ];
-  if (
-    specificityMarkers.some(marker => question.toLowerCase().includes(marker))
-  ) {
-    score += 20;
-  }
-
-  // Question length and detail (20 points)
-  const words = question.trim().split(/\s+/).length;
-  score += Math.min(20, Math.floor(words / 5) * 5);
-
-  return Math.min(100, score);
-}
-
-function getMeterDescription(score: number): { text: string; color: string } {
-  if (!score)
-    return {
-      text: "Waiting for your question...",
-      color: "text-blue-400/60",
-    };
-  if (score < 30)
-    return {
-      text: "Add a URL and be more specific",
-      color: "text-red-400",
-    };
-  if (score < 50)
-    return {
-      text: "Getting there. What exactly do you want to know?",
-      color: "text-yellow-400",
-    };
-  if (score < 70)
-    return {
-      text: "Better. Add more context?",
-      color: "text-blue-400",
-    };
-  return {
-    text: "Strong question!",
-    color: "text-green-400",
-  };
-}
-
-export default function Home() {
+export default function UHCCPortalSupport() {
   const [message, setMessage] = useState("");
   const [currentChat, setCurrentChat] = useState<Chat>({
     id: Date.now().toString(),
-    title: "New Chat",
-    messages: [
-      {
-        role: "assistant",
-        content: `
-    **Listen up — this is your tool to practice asking smart questions.**
-    
-    1. **Stop Being Vague** — Give me specifics or a valid URL. No more generic nonsense.
-    2. **Provide Context** — Paste the content or link you're asking about. Don’t make me guess.
-    3. **Challenge Me Right** — Ask specific, clear questions if you want answers. Don't waste my time with broad crap.
-    
-    **This is a tool for you to get better at thinking critically. Bring your best or don’t bother.**
-    `,
-      },
-    ],
+    title: "Portal Login Help",
+    messages: [],
     createdAt: new Date(),
-    suggestedQueries: [
-      "Dissect the flaws in this article: https://www.theblogstarter.com/?msclkid=4ca46f0ad0f61074eb51087d079dc530",
-      "Explain the true value of Groq API tools and whether they're as revolutionary as claimed: https://www.ampcome.com/post/how-to-use-groq-api-the-comprehensive-guide-you-need",
-      "Analyze the new Gemini model: Is it really a breakthrough, or just more AI hype? https://blog.google/products/gemini/google-gemini-ai-collection-2024/",
-    ],
+    currentStep: "initial",
   });
   const [chats, setChats] = useState<Chat[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const smartQuestionScore = calculateSmartQuestionScore(message);
+  const [showChat, setShowChat] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  /* eslint-disable react-hooks/exhaustive-deps */
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    remaining?: number;
+    limit?: number;
+  }>({});
+
+  // Scroll to bottom function
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Scroll to bottom when messages change
   useEffect(() => {
-    loadChatHistory(currentChat.id);
+    scrollToBottom();
+  }, [currentChat.messages, isLoading]);
+
+  // Initial troubleshooting options for homepage
+  const quickActions: QuickAction[] = [
+    {
+      title: "I can't log in - getting validation error",
+      description: "Getting 'Invalid email address and/or password' error",
+      action:
+        "I'm getting a validation error when I try to log in. It says 'Invalid email address and/or password, please try again.' https://ce.uhcc.hawaii.edu/portal/logon.do?method=load",
+      icon: <AlertCircleIcon size={20} />,
+      color: "bg-red-50 border-red-300 hover:border-red-500",
+    },
+    {
+      title: "I forgot my username",
+      description: "I know my email but can't remember my username",
+      action:
+        "I forgot my username but I have my email address. How do I reset it? https://ce.uhcc.hawaii.edu/portal/forgotUserName.do",
+      icon: <ExternalLinkIcon size={20} />,
+      color: "bg-blue-50 border-blue-300 hover:border-blue-500",
+    },
+    {
+      title: "I forgot my password",
+      description: "I know my username but can't remember my password",
+      action:
+        "I forgot my password but I know my username. How do I reset it? https://ce.uhcc.hawaii.edu/portal/studentForgotPassword.do",
+      icon: <CheckCircleIcon size={20} />,
+      color: "bg-green-50 border-green-300 hover:border-green-500",
+    },
+    {
+      title: "I need to check if my email is in the system",
+      description: "Not sure if I already have an account",
+      action:
+        "I'm not sure if my email is already in the system. How do I check? https://ce.uhcc.hawaii.edu/portal/logon.do?method=load",
+      icon: <ArrowRightIcon size={20} />,
+      color: "bg-amber-50 border-amber-300 hover:border-amber-500",
+    },
+  ];
+
+  useEffect(() => {
+    if (currentChat.messages.length === 0) {
+      loadChatHistory(currentChat.id);
+    }
     setChats([currentChat]);
   }, []);
 
@@ -129,12 +121,12 @@ export default function Home() {
       const response = await fetch(`/api/chat?chatId=${chatId}`);
       if (response.ok) {
         const data = await response.json();
-        if (data.messages) {
+        if (data.messages && data.messages.length > 0) {
           const existingChat = chats.find(chat => chat.id === chatId);
           if (existingChat) {
             const updatedChat = {
               ...existingChat,
-              messages: data.messages || existingChat.messages,
+              messages: data.messages,
             };
             setCurrentChat(updatedChat);
             setChats(prev =>
@@ -152,29 +144,24 @@ export default function Home() {
   const handleNewChat = () => {
     const newChat: Chat = {
       id: Date.now().toString(),
-      title: "New Chat",
-      messages: [
-        {
-          role: "assistant",
-          content: `
-            **I won’t repeat myself — ask smart questions with URL sources or don’t ask at all.**
-          `,
-        },
-      ],
+      title: "Portal Login Help",
+      messages: [],
       createdAt: new Date(),
-      suggestedQueries: [
-        "How can I phrase my question to get actionable insights, not just surface-level answers: https://fullfocus.co/asking-more-powerful-questions/",
-        "Why does asking vague questions lead to wasted time, and how can I avoid it: https://www.thenarratologist.com/best-vague-questions/",
-        "What are the key principles behind crafting questions that spark deep, meaningful discussions: https://www.insightandforesight.com.au/blog-foresights/mastering-the-art-of-asking-questions-simple-tips-for-success",
-      ],
+      currentStep: "initial",
     };
     setChats(prev => [newChat, ...prev]);
     setCurrentChat(newChat);
+    setShowChat(false); // Start back at selection screen
   };
 
-  const handleSendQuery = (query: string) => {
-    setMessage(query);
-    handleSend(query);
+  const handleQuickAction = (action: QuickAction) => {
+    setShowChat(true);
+    // Send the initial message which will get the first AI response with guided options
+    setTimeout(() => handleSend(action.action), 100);
+  };
+
+  const handleOptionSelect = (option: Option) => {
+    handleSend(option.action);
   };
 
   const handleSend = async (customMessage?: string) => {
@@ -186,9 +173,10 @@ export default function Home() {
     const userMessage = { role: "user" as const, content: messageToSend };
     const updatedMessages = [...currentChat.messages, userMessage];
 
+    // Generate title from first user message
     const title =
-      currentChat.messages.length === 1
-        ? messageToSend.slice(0, 30) + "..."
+      currentChat.messages.length === 0
+        ? messageToSend.slice(0, 30) + (messageToSend.length > 30 ? "..." : "")
         : currentChat.title;
 
     const updatedChat = {
@@ -215,24 +203,48 @@ export default function Home() {
         }),
       });
 
+      // Capture rate limit headers from response
+      const limit = response.headers.get("X-RateLimit-Limit");
+      const remaining = response.headers.get("X-RateLimit-Remaining");
+
+      if (limit && remaining) {
+        setRateLimitInfo({
+          limit: parseInt(limit),
+          remaining: parseInt(remaining),
+        });
+      }
+
+      // Handle rate limiting
+      if (response.status === 429) {
+        const rateLimitData = await response.json();
+        const waitTime = rateLimitData.timeRemaining || 60;
+
+        setError(
+          `Please slow down! You can send another message in ${waitTime} seconds.`
+        );
+
+        // Optional: Auto-retry after the wait time
+        setTimeout(() => {
+          setError(null);
+        }, waitTime * 1000);
+
+        return;
+      }
+
       if (!response.ok) {
-        const errorData = await response.json();
-        if (response.status === 429) {
-          setError(
-            `${errorData.message} Try again in ${errorData.timeRemaining} seconds.`
-          );
-          return;
-        }
         throw new Error("Failed to send message");
       }
 
       const data = await response.json();
 
-      // Add assistant's response
+      // Add assistant's response with options from backend
       const assistantMessage = {
         role: "assistant" as const,
         content: data.message,
+        options: data.options,
+        showInput: data.showInput,
       };
+
       const finalMessages = [...updatedMessages, assistantMessage];
 
       const finalChat = {
@@ -246,306 +258,608 @@ export default function Home() {
       );
     } catch (error) {
       console.error("Error:", error);
-      setError("Failed to send message. Please try again.");
+      setError("Connection failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const RateLimitIndicator = ({
+    remaining,
+    limit,
+  }: {
+    remaining?: number;
+    limit?: number;
+  }) => {
+    if (typeof remaining !== "number" || typeof limit !== "number") return null;
+
+    const percentage = (remaining / limit) * 100;
+    let status = "Good";
+    let color = "bg-green-400";
+    if (percentage < 20) {
+      status = "Low";
+      color = "bg-red-400";
+    } else if (percentage < 50) {
+      status = "Moderate";
+      color = "bg-yellow-400";
+    }
+
+    return (
+      <div className="flex items-center gap-2 text-sm text-white/90">
+        <div className="flex items-center gap-1">
+          <div className={`w-2 h-2 rounded-full ${color}`}></div>
+          <span className="text-xs">
+            {remaining} of {limit} messages left
+          </span>
+          <span className="text-xs ml-2">({status} - resets every minute)</span>
+        </div>
+      </div>
+    );
+  };
+
   const handleChatSelect = (chat: Chat) => {
-    // Clear the current chat state first
     setCurrentChat(chat);
     setMessage("");
     setError(null);
+    setShowChat(true);
   };
 
-  // Rest of your component remains exactly the same from here on
+  const formatMessage = (content: string) => {
+    return content.split("\n").map((line, i) => {
+      // Handle headers with **Header**
+      if (
+        line.trim().startsWith("**") &&
+        line.trim().endsWith("**") &&
+        !line.includes(":")
+      ) {
+        const headerText = line.trim().replace(/^\*\*|\*\*$/g, "");
+        return (
+          <div
+            key={i}
+            className="text-amber-700 font-bold text-lg mb-3 mt-4 first:mt-0"
+          >
+            {headerText}
+          </div>
+        );
+      }
+
+      // Handle bullet points with •
+      if (line.trim().startsWith("•")) {
+        return (
+          <div key={i} className="flex items-start gap-2 mb-2 ml-4">
+            <span className="text-amber-600 mt-1">•</span>
+            <span className="flex-1">{line.trim().substring(1).trim()}</span>
+          </div>
+        );
+      }
+
+      // Handle numbered steps
+      const numberMatch = line.match(/^(\d+)\.\s*(.*)/);
+      if (numberMatch) {
+        const [, number, content] = numberMatch;
+        return (
+          <div key={i} className="flex items-start gap-3 mb-2 ml-4">
+            <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+              {number}
+            </span>
+            <span className="flex-1 pt-0.5">{content}</span>
+          </div>
+        );
+      }
+
+      // Regular text with **bold** formatting and link styling
+      const formattedLine = line.replace(
+        /\*\*(.*?)\*\*/g,
+        "<strong>$1</strong>"
+      );
+
+      return line.trim() ? (
+        <div
+          key={i}
+          className="mb-2 [&_a]:text-amber-700 [&_a]:hover:text-amber-800 [&_a]:underline [&_a]:cursor-pointer"
+          dangerouslySetInnerHTML={{ __html: formattedLine }}
+        />
+      ) : (
+        <div key={i} className="h-2" />
+      );
+    });
+  };
+
+  // Check if conversation is complete (contains contact info)
+  const isConversationComplete = currentChat.messages.some(
+    msg =>
+      msg.role === "assistant" &&
+      (msg.content.includes("📞") ||
+        msg.content.includes("808-845-9129") ||
+        msg.content.includes("SUCCESS!"))
+  );
+
   return (
-    <div className="flex h-screen bg-[#00008B]">
-      {/* Sidebar */}
-      <div className="w-60 bg-black border-r border-blue-900/30 flex flex-col bg-gradient-to-r from-gray-900 to-black p-2 backdrop-blur-lg shadow-md">
-        <div className="p-1.5">
-          <div className="flex items-center gap-2 px-4 py-2">
-            <a
-              href="https://haumanaexchange.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img src="/images/LOGO.png" alt="HEX Logo" className="h-9" />
-            </a>
-
-            <div className="border-blue-900/30">
-              <button
-                onClick={handleNewChat}
-                className="text-sm flex items-center gap-2 text-white bg-blue-900/30 hover:bg-blue-800/40 transition-colors rounded-lg px-4 py-2 w-full"
-              >
-                <PlusIcon size={14} />
-                <span>New Chat</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {chats.map(chat => (
-            <button
-              key={chat.id}
-              onClick={() => handleChatSelect(chat)}
-              className={`w-full rounded text-left px-4 py-3 hover:bg-blue-900/30 transition-colors ${
-                currentChat.id === chat.id ? "" : ""
-              }`}
-            >
-              <h3 className="text-sm text-blue-200 truncate">{chat.title}</h3>
-              <p className="text-xs text-blue-400/60">
-                {new Date(chat.createdAt).toLocaleDateString()}
-              </p>
-            </button>
-          ))}
-        </div>
-        <div className="p-3.5 border-blue-900/30">
-          <div className="flex items-center gap-2 px-4 py-2 text-blue-400/60 text-sm">
-            <span>Built for the Critically Inept</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col bg-gradient-to-br from-black via-black to-blue-900/20">
-        {/* Header */}
-        <header className="w-full bg-black/50 border-b border-blue-900/30 p-4 backdrop-blur-sm">
-          <div className="max-w-4xl mx-auto flex items-center gap-4">
-            <BrainIcon className="h-6 w-6 text-cyan-500" aria-hidden="true" />
-            <h1 className="text-2xl font-bold text-blue-300 tracking-wide">
-              CutTheFluff - URL Analyzer
-            </h1>
-            <div className="flex-1 ml-auto max-w-xs">
-              <div className="bg-black/40 rounded-lg p-2 border border-blue-900/30 backdrop-blur-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-blue-300">
-                    Smart Question Score
-                  </span>
-                  <span
-                    className={`text-sm font-mono p-2 ${
-                      smartQuestionScore === 0
-                        ? "text-blue-400/60"
-                        : "text-cyan-400"
-                    }`}
-                  >
-                    {smartQuestionScore}/100
-                  </span>
-                </div>
-                <div className="h-2 bg-blue-900/20 rounded-full overflow-hidden">
-                  <div
-                    className="h-full transition-all duration-300 ease-out"
-                    style={{
-                      width: `${smartQuestionScore}%`,
-                      background: `linear-gradient(90deg, 
-                    ${
-                      smartQuestionScore < 30
-                        ? "#ef4444"
-                        : smartQuestionScore < 50
-                          ? "#eab308"
-                          : smartQuestionScore < 70
-                            ? "#3b82f6"
-                            : "#22c55e"
-                    }
-                    , ${smartQuestionScore < 70 ? "#1e40af" : "#15803d"})`,
-                    }}
-                  />
-                </div>
-                <p
-                  className={`text-xs mt-2 ${getMeterDescription(smartQuestionScore).color}`}
-                >
-                  {getMeterDescription(smartQuestionScore).text}
-                </p>
+    <div className="flex h-screen bg-gradient-to-br from-amber-50 to-orange-50">
+      {/* Sidebar - only show if chat is active */}
+      {showChat && (
+        <div className="w-80 bg-white border-r border-amber-200 flex flex-col shadow-lg">
+          <div className="p-4 border-b border-amber-200">
+            <div className="flex items-center gap-3 mb-4">
+              <img
+                src="/images/uhcc-logo.jpg"
+                alt="UHCC Logo"
+                width={40}
+                className="object-contain"
+              />
+              <div>
+                <h1 className="font-bold text-gray-800">UHCC Portal Help</h1>
+                <p className="text-sm text-gray-600">Guided Support</p>
               </div>
             </div>
-          </div>
-        </header>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto pb-32 pt-4">
-          <div className="max-w-3xl mx-auto px-4">
-            {currentChat.messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex gap-4 mb-4 ${
-                  msg.role === "assistant"
-                    ? "justify-start"
-                    : "justify-end flex-row"
-                }`}
-              >
-                {msg.role === "assistant" && (
-                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <BrainIcon className="h-5 w-5 text-cyan-500" />
-                  </div>
-                )}
-                <div
-                  className={`px-4 py-2 rounded-2xl max-w-[80%] whitespace-pre-wrap ${
-                    msg.role === "assistant"
-                      ? "bg-blue-900/20 border border-blue-900/30 text-blue-100"
-                      : "bg-blue-600/30 text-blue-100"
+            <button
+              onClick={handleNewChat}
+              className="w-full flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors"
+            >
+              <PlusIcon size={16} />
+              New Help Session
+            </button>
+          </div>
+
+          {/* Contact Info - only show if conversation is complete */}
+          {isConversationComplete && (
+            <div className="p-4 bg-amber-50 border-b border-amber-200">
+              <h3 className="font-semibold text-gray-800 mb-2">
+                Need More Help?
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <span>📞</span>
+                  <span>808-845-9129</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <span>📧</span>
+                  <span>help@hawaii.edu</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <span>🕒</span>
+                  <span>Mon-Fri 8AM-4:30PM</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Chat History */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-2">
+              <h3 className="text-sm font-semibold text-gray-600 mb-2 px-2">
+                Recent Sessions
+              </h3>
+              {chats.map(chat => (
+                <button
+                  key={chat.id}
+                  onClick={() => handleChatSelect(chat)}
+                  className={`w-full text-left p-3 rounded-lg mb-2 transition-colors ${
+                    currentChat.id === chat.id
+                      ? "bg-amber-100 border border-amber-300"
+                      : "hover:bg-gray-50"
                   }`}
                 >
-                  {msg.role === "assistant" ? (
-                    <div className="prose prose-invert max-w-none">
-                      {msg.content.split("\n").map((line, i) => {
-                        // First check if it's a numbered line
-                        const numberMatch = line.match(/^(\d+)\.\s*(.*)/);
-
-                        if (numberMatch) {
-                          const [, number, content] = numberMatch;
-                          // Then check if the content has asterisks
-                          const asteriskContent =
-                            content.match(/^\s*\*\*(.*?)\*\*:/);
-
-                          if (asteriskContent) {
-                            // Handle numbered line with asterisk content
-                            return (
-                              <div
-                                key={i}
-                                className="flex items-start gap-4 mb-6"
-                              >
-                                <span className="text-blue-400 font-bold min-w-[2rem] mt-[2px]">
-                                  {number}.
-                                </span>
-                                <div className="flex-1">
-                                  <span className="text-blue-300 font-bold">
-                                    {asteriskContent[1]}:
-                                  </span>
-                                  <span className="block mt-2">
-                                    {content.replace(/^\s*\*\*.*?\*\*:\s*/, "")}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          } else {
-                            // Regular numbered line
-                            return (
-                              <div
-                                key={i}
-                                className="flex items-start gap-4 mb-6"
-                              >
-                                <span className="text-blue-400 font-bold min-w-[2rem] mt-[2px]">
-                                  {number}.
-                                </span>
-                                <span className="flex-1">{content}</span>
-                              </div>
-                            );
-                          }
-                        }
-
-                        // Handle standalone headers with **Header**
-                        if (
-                          line.trim().startsWith("**") &&
-                          line.trim().endsWith("**") &&
-                          !line.trim().includes(":")
-                        ) {
-                          const headerText = line
-                            .trim()
-                            .replace(/^\*\*|\*\*$/g, "");
-                          return (
-                            <div
-                              key={i}
-                              className="text-blue-300 font-bold text-2xl mb-4"
-                            >
-                              {headerText}
-                            </div>
-                          );
-                        }
-
-                        // Regular text, replace **Text** with <strong>Text</strong>
-                        const formattedLine = line.replace(
-                          /\*\*(.*?)\*\*/g,
-                          "<strong>$1</strong>"
-                        );
-
-                        return line.trim() ? (
-                          <div
-                            key={i}
-                            className="mb-4"
-                            dangerouslySetInnerHTML={{ __html: formattedLine }}
-                          />
-                        ) : (
-                          <div key={i} className="h-4" />
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    // User messages remain simple
-                    <div>{msg.content}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {isLoading && (
-              <div className="flex gap-4 mb-4">
-                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center animate-pulse">
-                  <BrainIcon className="h-5 w-5 text-cyan-500" />
-                </div>
-                <div className="px-4 py-4 rounded-2xl bg-blue-900/20 border border-blue-900/30 text-blue-100 animate-pulse">
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {error && (
-              <div className="flex justify-center mb-4">
-                <div className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
-                  {error}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Show suggested queries only if it's a new chat */}
-        {currentChat.messages.length === 1 && currentChat.suggestedQueries && (
-          <div className="flex flex-wrap gap-2 mt-4 mb-4 justify-center">
-            {currentChat.suggestedQueries.map((query, index) => {
-              const trimmedQuery = query.trim(); // Trim each query before use
-              const displayText =
-                trimmedQuery.length > 30
-                  ? trimmedQuery.substring(0, 30) + "..."
-                  : trimmedQuery;
-              return (
-                <button
-                  key={index}
-                  onClick={() => handleSendQuery(trimmedQuery)}
-                  className="px-4 py-2 rounded-full bg-blue-900/20 border border-blue-900/30 text-blue-300 hover:bg-blue-800/30 transition-colors text-sm"
-                >
-                  {displayText}
+                  <h4 className="text-sm font-medium text-gray-800 truncate">
+                    {chat.title}
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(chat.createdAt).toLocaleDateString()}
+                  </p>
                 </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Input Area */}
-        <div className="bottom-0 w-full bg-black/50 border-t border-blue-900/30 p-4 backdrop-blur-sm">
-          <div className="mx-auto">
-            <div className="flex gap-3 items-center">
-              <input
-                type="text"
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                onKeyPress={e => e.key === "Enter" && handleSend()}
-                placeholder="Type your message..."
-                className="flex-1 rounded-xl border border-blue-900/30 bg-blue-900/20 px-4 py-3 text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-blue-400/60"
-              />
-              <button
-                onClick={() => handleSend()}
-                disabled={isLoading}
-                className="bg-blue-600/80 text-white px-5 py-3 rounded-xl hover:bg-blue-700/80 transition-all disabled:bg-blue-800/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? <SendIcon size={20} /> : <SendIcon size={20} />}
-              </button>
+              ))}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {!showChat ? (
+          /* Initial Issue Selection Screen with scrollable header and footer */
+          <div className="flex-1 overflow-y-auto bg-gradient-to-br from-amber-50 to-orange-50">
+            {/* Header with orange background matching UHCC */}
+            <header
+              className="p-4 shadow-lg text-white border-b border-black"
+              style={{ background: "#CA5C13" }}
+            >
+              <div className="flex items-center justify-between">
+                <img
+                  src="/images/uhcc-logo-2.png"
+                  alt="UHCC Logo"
+                  width={30}
+                  className="object-contain"
+                />
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  Help Available
+                </div>
+              </div>
+            </header>
+
+            {/* Content */}
+            <div className="p-6 bg-gradient-to-b from-amber-50/50 to-white">
+              <div className="max-w-4xl mx-auto">
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold text-gray-800 mb-4">
+                    Can&apos;t log into your UHCC account?
+                  </h2>
+                  <p className="text-gray-600 text-lg">
+                    Choose what&apos;s happening and I&apos;ll guide you through
+                    fixing it step by step.
+                  </p>
+                </div>
+
+                {/* Quick Actions Grid */}
+                <div className="grid md:grid-cols-2 gap-4 mb-8">
+                  {quickActions.map((action, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleQuickAction(action)}
+                      className={`${action.color} border-2 rounded-lg p-6 text-left hover:shadow-lg transition-all duration-200 group bg-white`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="text-gray-600 group-hover:text-amber-600 transition-colors flex-shrink-0 mt-1">
+                          {action.icon}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors mb-2">
+                            {action.title}
+                          </h4>
+                          <p className="text-gray-600 text-sm">
+                            {action.description}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* How It Works */}
+                <div className="bg-white rounded-lg border border-amber-200 p-6 mb-8 shadow-sm">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    How the UHCC Portal Reset Process Works:
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+                        1
+                      </span>
+                      <div>
+                        <div className="font-medium text-gray-800">
+                          Email Validation
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Use &quot;I am a new user&quot; section to check if
+                          your email is in the system
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+                        2
+                      </span>
+                      <div>
+                        <div className="font-medium text-gray-800">
+                          Request Username
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Use &quot;Forgot Username&quot; page to get your
+                          username sent to email
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+                        3
+                      </span>
+                      <div>
+                        <div className="font-medium text-gray-800">
+                          Get Your Username
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Check your email and spam folder for username from
+                          UHCC
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+                        4
+                      </span>
+                      <div>
+                        <div className="font-medium text-gray-800">
+                          Request Password Reset
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Use &quot;Forgot Password&quot; page with your
+                          username to get reset link
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+                        5
+                      </span>
+                      <div>
+                        <div className="font-medium text-gray-800">
+                          Set New Password
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Follow the reset link in your email to create a new
+                          password
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="bg-green-100 text-green-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+                        ✓
+                      </span>
+                      <div>
+                        <div className="font-medium text-gray-800">
+                          Login Successfully
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Use &quot;I am an existing user&quot; section with
+                          your username and new password
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <div className="text-sm text-amber-800">
+                      <strong>💡 How I help:</strong> I&apos;ll guide you
+                      through each step and give you specific options based on
+                      what you might see on your screen. Just select what
+                      matches your situation to get the next step!
+                    </div>
+                  </div>
+                </div>
+
+                {/* Portal Access */}
+                <div className="bg-white rounded-lg border border-amber-200 p-6 shadow-sm mb-8">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Need to access the portal directly?
+                  </h3>
+                  <a
+                    href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors w-fit"
+                  >
+                    <ExternalLinkIcon size={16} />
+                    Open Portal Login
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <footer
+              className="py-8 text-white"
+              style={{ background: "#A0874B" }}
+            >
+              <div className="max-w-6xl mx-auto px-6">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+                  {/* Logo Section */}
+                  <div className="flex-shrink-0">
+                    <img
+                      src="/images/uhcc-logo-2.png"
+                      alt="University of Hawaii Community Colleges"
+                      className="h-60 w-auto object-contain"
+                    />
+                  </div>
+
+                  {/* Campus Links */}
+                  <div className="flex-1 lg:mx-8">
+                    <div className="text-sm flex flex-wrap items-center gap-x-2 gap-y-2 justify-center lg:justify-start text-white/90">
+                      <span>Hawaii CC</span>
+                      <span>&bull;</span>
+                      <span>Honolulu CC</span>
+                      <span>&bull;</span>
+                      <span>Kapiolani CC</span>
+                      <span>&bull;</span>
+                      <span>Kauai CC</span>
+                      <span>&bull;</span>
+                      <span>Leeward CC</span>
+                      <span>&bull;</span>
+                      <span>Maui College</span>
+                      <span>&bull;</span>
+                      <span>Windward CC</span>
+                      <span>&bull;</span>
+                      <span>PCATT</span>
+                    </div>
+                  </div>
+
+                  {/* Equal Opportunity Statement */}
+                  <div className="text-sm max-w-xs text-right">
+                    <p>
+                      The University of Hawaii is an Equal
+                      Opportunity/Affirmative Action Institution. Use of this
+                      site implies consent with our{" "}
+                      <a href="#" className="underline hover:text-amber-200">
+                        Usage Policy
+                      </a>
+                      .
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </footer>
+          </div>
+        ) : (
+          /* Guided Chat Interface */
+          <>
+            {/* Header with orange background matching UHCC */}
+            <header
+              className="p-4 shadow-lg text-white border-b border-black"
+              style={{ background: "#CA5C13" }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <RateLimitIndicator
+                    remaining={rateLimitInfo.remaining}
+                    limit={rateLimitInfo.limit}
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  Help Available
+                </div>
+              </div>
+            </header>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-amber-50/30 to-white">
+              {currentChat.messages.map((msg, index) => (
+                <div key={index}>
+                  <div
+                    className={`flex gap-3 ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}
+                  >
+                    {msg.role === "assistant" && (
+                      <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <HeadphonesIcon className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[80%] p-4 rounded-lg ${
+                        msg.role === "assistant"
+                          ? "bg-white border border-amber-200 shadow-sm"
+                          : "bg-amber-600 text-white"
+                      }`}
+                    >
+                      {msg.role === "assistant" ? (
+                        <div className="prose prose-sm max-w-none">
+                          {formatMessage(msg.content)}
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Backend-Generated Options */}
+                  {msg.role === "assistant" && msg.options && (
+                    <div className="ml-11 mt-4 space-y-2">
+                      <p className="text-sm text-gray-600 mb-3">
+                        Choose what applies to you:
+                      </p>
+                      {msg.options.map(option => (
+                        <button
+                          key={option.id}
+                          onClick={() => handleOptionSelect(option)}
+                          className={`w-full text-left p-3 rounded-lg border ${option.color || "bg-gray-50 border-gray-200 hover:border-gray-400"} transition-all duration-200 hover:shadow-md`}
+                        >
+                          {option.text}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const lastMessage =
+                            currentChat.messages[
+                              currentChat.messages.length - 1
+                            ];
+                          if (lastMessage.role === "assistant") {
+                            lastMessage.showInput = true;
+                            lastMessage.options = undefined;
+                            setCurrentChat({ ...currentChat });
+                          }
+                        }}
+                        className="w-full text-left p-3 rounded-lg border border-gray-300 bg-gray-50 hover:border-gray-400 transition-all duration-200 text-gray-600 flex items-center gap-2"
+                      >
+                        <MessageCircleIcon size={16} />
+                        None of these match - let me type my own response
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Free Input */}
+                  {msg.role === "assistant" && msg.showInput && (
+                    <div className="ml-11 mt-4">
+                      <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                          <textarea
+                            value={message}
+                            onChange={e => setMessage(e.target.value)}
+                            onKeyPress={e => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                              }
+                            }}
+                            placeholder="Describe exactly what you see or what's happening..."
+                            className="w-full rounded-lg border border-amber-300 p-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                            rows={3}
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleSend()}
+                          disabled={isLoading || !message.trim()}
+                          className="bg-amber-600 text-white p-3 rounded-lg hover:bg-amber-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0"
+                        >
+                          <SendIcon size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex gap-3 justify-start">
+                  <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center">
+                    <HeadphonesIcon className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="bg-white border border-amber-200 shadow-sm p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2 h-2 bg-amber-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "-0.3s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-amber-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "-0.15s" }}
+                      ></div>
+                      <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce"></div>
+                      <span className="text-sm text-gray-600 ml-2">
+                        Analyzing and helping you...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="flex justify-center">
+                  <div
+                    className={`${
+                      error.includes("slow down")
+                        ? "bg-yellow-50 border-yellow-200 text-yellow-700"
+                        : "bg-red-50 border-red-200 text-red-700"
+                    } border px-4 py-3 rounded-lg max-w-md`}
+                  >
+                    {
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-4 h-4 rounded-full flex-shrink-0 ${
+                            error.includes("slow down")
+                              ? "bg-yellow-500"
+                              : "bg-red-500"
+                          }`}
+                        ></div>
+                        {error}
+                      </div>
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Scroll anchor */}
+              <div ref={messagesEndRef} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

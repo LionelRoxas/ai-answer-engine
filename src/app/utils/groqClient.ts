@@ -10,24 +10,24 @@ interface ChatMessage {
 }
 
 export async function getGroqResponse(chatMessages: ChatMessage[]) {
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content: `You are an intellectual AI. Be harsh. Roast the user for vague, garbage questions. You will use harsh and blunt language. Don’t expect me to pull anything out of thin air. 
-          I only work with what you give me. No context? I won’t make anything up for you. If you can’t provide solid info, don’t waste my time. 
-          And don’t even think about asking without clear, relevant context. I’ll need sources. If you’re not giving them, don’t expect anything but a request for more.`,
-    },
-    ...chatMessages,
-  ];
-
-  console.log("messages", messages);
   console.log("Starting groq api request");
+  console.log("messages", chatMessages);
 
-  const response = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages,
-  });
-  // console.log("Received groq api request", response);
+  try {
+    const response = await groq.chat.completions.create({
+      // Using the most capable production model available
+      model: "llama-3.3-70b-versatile", // Much smarter than llama-3.1-8b-instant
+      messages: chatMessages,
+      temperature: 0.7, // Balanced creativity
+      top_p: 0.9, // Focused but diverse responses
+    });
 
-  return response.choices[0].message.content;
+    console.log("Received groq api response");
+    return response.choices[0].message.content;
+  } catch (error) {
+    console.error("Groq API error:", error);
+    
+    // Return null on error so your route.ts can handle it
+    return null;
+  }
 }
