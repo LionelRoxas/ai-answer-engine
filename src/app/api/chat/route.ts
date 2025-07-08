@@ -98,10 +98,10 @@ const UHCC_PORTAL_KNOWLEDGE = {
     main_portal: "https://ce.uhcc.hawaii.edu/portal/logon.do?method=load",
   },
   contact_info: {
-    phone: "808-845-9129",
-    email: "help@hawaii.edu",
-    hours: "Mon-Fri 8AM-4:30PM",
-    formatted: "📞 808-845-9129\n📧 help@hawaii.edu\n🕒 Mon-Fri 8AM-4:30PM",
+    phone: "808-842-2563",
+    email: "uhcccewd@hawaii.edu",
+    hours: "Mon-Fri 8AM-3PM",
+    formatted: "📞 808-842-2563\n📧 uhcccewd@hawaii.edu\n🕒 Mon-Fri 8AM-3PM",
   },
 };
 
@@ -657,9 +657,9 @@ Immediately provide contact info for:
 - Any non-login related queries
 
 Contact: 
-📞 808-845-9129
-📧 help@hawaii.edu
-🕒 Mon-Fri 8AM-4:30PM
+📞 808-842-2563
+📧 uhcccewd@hawaii.edu
+🕒 Mon-Fri 8AM-3PM
 
 UHCC PORTAL KNOWLEDGE BASE:
 ${JSON.stringify(UHCC_PORTAL_KNOWLEDGE, null, 2)}
@@ -708,9 +708,9 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
       {
         message: `I'm having some technical trouble right now. For immediate help with your login issue, please contact:
 
-📞 808-845-9129
-📧 help@hawaii.edu
-🕒 Mon-Fri 8AM-4:30PM
+📞 808-842-2563
+📧 uhcccewd@hawaii.edu
+🕒 Mon-Fri 8AM-3PM
 
 They'll be able to help you get back into your account right away!`,
         showInput: false,

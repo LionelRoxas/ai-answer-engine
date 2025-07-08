@@ -408,7 +408,7 @@ export default function UHCCPortalSupport() {
     msg =>
       msg.role === "assistant" &&
       (msg.content.includes("📞") ||
-        msg.content.includes("808-845-9129") ||
+        msg.content.includes("808-842-2563") ||
         msg.content.includes("SUCCESS!"))
   );
 
@@ -449,15 +449,15 @@ export default function UHCCPortalSupport() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>📞</span>
-                  <span>808-845-9129</span>
+                  <span>808-842-2563</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>📧</span>
-                  <span>help@hawaii.edu</span>
+                  <span>uhcccewd@hawaii.edu</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>🕒</span>
-                  <span>Mon-Fri 8AM-4:30PM</span>
+                  <span>Mon-Fri 8AM-3PM</span>
                 </div>
               </div>
             </div>
