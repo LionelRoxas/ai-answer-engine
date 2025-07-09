@@ -925,9 +925,6 @@ export default function UHCCPortalSupport() {
                         style={{ animationDelay: "-0.15s" }}
                       ></div>
                       <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce"></div>
-                      <span className="text-sm text-gray-600 ml-2">
-                        Analyzing and helping you...
-                      </span>
                     </div>
                   </div>
                 </div>
