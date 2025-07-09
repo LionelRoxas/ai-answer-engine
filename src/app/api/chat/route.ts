@@ -8,6 +8,25 @@ import {
   getConversation,
 } from "@/app/utils/scraper";
 
+type MessageImage = {
+  id: string;
+  src: string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+};
+
+// Enhanced type for tracking conversation context
+type ConversationContext = {
+  state: string;
+  stepNumber: number;
+  attemptedEmails: string[];
+  stuckIndicators: number;
+  lastSuccessfulStep: number;
+  userSentiment: "positive" | "neutral" | "frustrated";
+};
+
 // UHCC Non-Credit Portal Knowledge Base
 const UHCC_PORTAL_KNOWLEDGE = {
   reset_process: {
@@ -105,8 +124,118 @@ const UHCC_PORTAL_KNOWLEDGE = {
   },
 };
 
-// Enhanced state detection with more nuanced understanding
-function getUserState(messages: any[]): string {
+// Enhanced STEP_IMAGES with intelligent mapping
+const STEP_IMAGES = {
+  initial: {
+    id: "portal_login",
+    src: "/images/steps/portal-login-page.png",
+    alt: "UHCC Portal Login Page",
+    caption: "The main UHCC portal login page",
+    keywords: ["portal", "login", "main", "start", "beginning"],
+    stepNumber: 0,
+  },
+  has_login_error: {
+    id: "login_error",
+    src: "/images/steps/login-error.png",
+    alt: "Login error message",
+    caption: "This is what you see when you get a login error",
+    keywords: ["error", "invalid", "locked", "can't login", "problem"],
+    stepNumber: 1,
+  },
+  checking_email_validation: {
+    id: "new_user_section",
+    src: "/images/steps/new-user-section.PNG",
+    alt: "I am a new user section",
+    caption: "RIGHT SIDE: 'I am a new user' section for email validation",
+    keywords: ["new user", "right side", "email check", "validation"],
+    stepNumber: 1,
+  },
+  email_validated_ready_for_username: {
+    id: "validation_error_good",
+    src: "/images/steps/validation-error-success.png",
+    alt: "Good validation error message",
+    caption:
+      "After putting your email on the 'I am a new user' section, you should get this message. This validation error means your email IS in the system! ✅",
+    keywords: [
+      "validation error",
+      "existing student",
+      "email found",
+      "success",
+    ],
+    stepNumber: 2,
+  },
+  username_email_sent: {
+    id: "check_email",
+    src: "/images/steps/check-email-inbox.PNG",
+    alt: "Check email inbox",
+    caption: "Check both inbox and spam folder for username email",
+    keywords: ["check email", "inbox", "spam", "username email"],
+    stepNumber: 3,
+  },
+  ready_for_password_reset: {
+    id: "forgot_password_page",
+    src: "/images/steps/forgot-password-page.PNG",
+    alt: "Forgot Password page",
+    caption: "Enter your username here to get password reset link",
+    keywords: ["forgot password", "username", "password reset"],
+    stepNumber: 4,
+  },
+  password_reset_in_progress: {
+    id: "password_reset_email",
+    src: "/images/steps/password-reset-email.PNG",
+    alt: "Password reset email",
+    caption: "Click the reset link in your email",
+    keywords: ["reset link", "password email", "reset password"],
+    stepNumber: 5,
+  },
+  process_complete: {
+    id: "login_success",
+    src: "/images/steps/login-success.PNG",
+    alt: "Successful login",
+    caption: "Success! You're now logged into the portal",
+    keywords: ["success", "logged in", "complete", "dashboard"],
+    stepNumber: 6,
+  },
+};
+
+// Additional context-specific images
+const CONTEXTUAL_IMAGES = {
+  contact_form: {
+    id: "contact_form_error",
+    src: "/images/steps/contact-form-error.png",
+    alt: "Contact form appears",
+    caption:
+      "If you see this contact form, your email is NOT in the system - try a different email",
+    keywords: ["contact form", "email not found", "wrong email"],
+  },
+  spam_folder: {
+    id: "spam_folder_check",
+    src: "/images/steps/spam-folder-check.PNG",
+    alt: "Check spam folder",
+    caption: "Always check your spam/junk folder for UHCC emails",
+    keywords: ["spam", "junk", "not receiving", "no email"],
+  },
+  forgot_username_link: {
+    id: "forgot_username_location",
+    src: "/images/steps/forgot-username-location.PNG",
+    alt: "Forgot Username link location",
+    caption:
+      "Click 'Forgot Username' on the LEFT side after validating your email",
+    keywords: ["forgot username", "left side", "username link"],
+  },
+};
+
+// Enhanced state detection with context tracking
+function analyzeUserState(messages: any[]): ConversationContext {
+  const context: ConversationContext = {
+    state: "initial",
+    stepNumber: 0,
+    attemptedEmails: [],
+    stuckIndicators: 0,
+    lastSuccessfulStep: 0,
+    userSentiment: "neutral",
+  };
+
   const allMessages = messages
     .map(m => m.content?.toLowerCase() || "")
     .join(" ");
@@ -115,7 +244,50 @@ function getUserState(messages: any[]): string {
   const messageHistory = messages.map(m => m.content?.toLowerCase() || "");
   const lastFewMessages = messageHistory.slice(-3).join(" ");
 
-  // Check for indicators that user wants to start over or try different email
+  // Extract attempted emails
+  messages.forEach(msg => {
+    const emailMatches = msg.content?.match(
+      /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g
+    );
+    if (emailMatches) {
+      emailMatches.forEach((email: string) => {
+        if (!context.attemptedEmails.includes(email.toLowerCase())) {
+          context.attemptedEmails.push(email.toLowerCase());
+        }
+      });
+    }
+  });
+
+  // Analyze sentiment and stuck patterns
+  const frustrationIndicators = [
+    "not working",
+    "still not",
+    "nothing",
+    "can't find",
+    "help",
+    "frustrated",
+    "stuck",
+    "doesn't work",
+    "tried everything",
+  ];
+
+  frustrationIndicators.forEach(indicator => {
+    if (lastFewMessages.includes(indicator)) {
+      context.stuckIndicators++;
+    }
+  });
+
+  if (context.stuckIndicators >= 3) {
+    context.userSentiment = "frustrated";
+  } else if (
+    lastFewMessages.includes("great") ||
+    lastFewMessages.includes("thanks") ||
+    lastFewMessages.includes("perfect")
+  ) {
+    context.userSentiment = "positive";
+  }
+
+  // Original state detection logic preserved
   if (
     lastFewMessages.includes("start over") ||
     lastFewMessages.includes("try different email") ||
@@ -126,7 +298,8 @@ function getUserState(messages: any[]): string {
     lastFewMessages.includes("not receiving") ||
     lastFewMessages.includes("nothing in spam")
   ) {
-    return "restart_needed";
+    context.state = "restart_needed";
+    return context;
   }
 
   // Step 6: Successfully completed
@@ -137,21 +310,23 @@ function getUserState(messages: any[]): string {
       allMessages.includes("i'm in") ||
       allMessages.includes("it worked"))
   ) {
-    return "process_complete";
+    context.state = "process_complete";
+    context.stepNumber = 6;
+    context.lastSuccessfulStep = 6;
+    return context;
   }
 
-  // Step 5: Password reset in progress
+  // Continue with all original state checks...
   if (
     allMessages.includes("password reset") &&
     (allMessages.includes("email") ||
       allMessages.includes("link") ||
       allMessages.includes("got the reset"))
   ) {
-    return "password_reset_in_progress";
-  }
-
-  // Step 4: Ready for password reset (has username)
-  if (
+    context.state = "password_reset_in_progress";
+    context.stepNumber = 5;
+    context.lastSuccessfulStep = 4;
+  } else if (
     allMessages.includes("got my username") ||
     allMessages.includes("have username") ||
     allMessages.includes("received username") ||
@@ -159,41 +334,36 @@ function getUserState(messages: any[]): string {
     allMessages.includes("username from email") ||
     allMessages.includes("found it!")
   ) {
-    return "ready_for_password_reset";
-  }
-
-  // Step 3: Username email sent, waiting for user to check
-  if (
+    context.state = "ready_for_password_reset";
+    context.stepNumber = 4;
+    context.lastSuccessfulStep = 3;
+  } else if (
     allMessages.includes("username") &&
     (allMessages.includes("sent") ||
       allMessages.includes("check your email") ||
       allMessages.includes("email sent"))
   ) {
-    return "username_email_sent";
-  }
-
-  // Step 2: Ready for username reset (email validated)
-  if (
+    context.state = "username_email_sent";
+    context.stepNumber = 3;
+    context.lastSuccessfulStep = 2;
+  } else if (
     allMessages.includes("existing student record") ||
     allMessages.includes("validation error") ||
     allMessages.includes("email exists") ||
     allMessages.includes("email is in the system") ||
     (allMessages.includes("error") && allMessages.includes("good"))
   ) {
-    return "email_validated_ready_for_username";
-  }
-
-  // Step 1b: In "new user" section
-  if (
+    context.state = "email_validated_ready_for_username";
+    context.stepNumber = 2;
+    context.lastSuccessfulStep = 1;
+  } else if (
     lastFewMessages.includes("new user") ||
     lastFewMessages.includes("right side") ||
     lastFewMessages.includes("checking email")
   ) {
-    return "checking_email_validation";
-  }
-
-  // Step 1a: Has validation error from login attempt
-  if (
+    context.state = "checking_email_validation";
+    context.stepNumber = 1;
+  } else if (
     allMessages.includes("invalid email") ||
     allMessages.includes("invalid password") ||
     allMessages.includes("login error") ||
@@ -201,16 +371,65 @@ function getUserState(messages: any[]): string {
     allMessages.includes("won't let me") ||
     allMessages.includes("locked out")
   ) {
-    return "has_login_error";
+    context.state = "has_login_error";
+    context.stepNumber = 1;
   }
 
-  return "initial";
+  return context;
 }
 
-// Enhanced response generation for each state
+// Intelligent image selector based on context
+function selectBestImage(
+  context: ConversationContext,
+  aiResponse: string,
+  userMessage: string,
+  pageContext: string
+): MessageImage {
+  const combinedContext =
+    `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
+
+  // First, check for contextual images
+  for (const image of Object.values(CONTEXTUAL_IMAGES)) {
+    if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
+      return image;
+    }
+  }
+
+  // Then check state-based images with keyword matching
+  const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
+  if (stateImage) {
+    // Verify it's the right image by checking keywords
+    if (
+      stateImage.keywords &&
+      stateImage.keywords.some(keyword => combinedContext.includes(keyword))
+    ) {
+      return stateImage;
+    }
+  }
+
+  // Fallback to step number matching
+  const stepImages = Object.values(STEP_IMAGES).filter(
+    img => img.stepNumber === context.stepNumber
+  );
+  if (stepImages.length > 0) {
+    // Find best match by keywords
+    const bestMatch = stepImages.find(
+      img =>
+        img.keywords &&
+        img.keywords.some(keyword => combinedContext.includes(keyword))
+    );
+    if (bestMatch) return bestMatch;
+    return stepImages[0]; // Default to first image for that step
+  }
+
+  // Ultimate fallback
+  return stateImage || STEP_IMAGES.initial;
+}
+
+// Enhanced response generation with sentiment awareness
 async function generateAIExpectedOutcomes(
   aiResponse: string,
-  currentState: string,
+  currentContext: ConversationContext,
   conversationHistory: any[]
 ): Promise<any> {
   // Check if the AI response includes contact info - if so, don't show options
@@ -249,7 +468,11 @@ async function generateAIExpectedOutcomes(
   const outcomePrompt = `You are generating simple, natural response options for a user in a UHCC portal support conversation.
 
 CURRENT CONTEXT:
-- User State: ${currentState}
+- User State: ${currentContext.state}
+- Step Number: ${currentContext.stepNumber}
+- User Sentiment: ${currentContext.userSentiment}
+- Stuck Indicators: ${currentContext.stuckIndicators}
+- Attempted Emails: ${currentContext.attemptedEmails.length}
 - AI's Question/Action: "${lastQuestion || keyAction}"
 - Full AI Response: "${aiResponse}"
 
@@ -263,11 +486,14 @@ UHCC PORTAL KNOWLEDGE:
 ${JSON.stringify(UHCC_PORTAL_KNOWLEDGE, null, 2)}
 
 RULES FOR GENERATING OPTIONS:
-1. Generate 2-3 SHORT, NATURAL user responses (5-15 words max)
+1. Generate 2-4 SHORT, NATURAL user responses (5-15 words max)
 2. Write from the user's perspective only
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
 5. Always include a "try different email" option when stuck on email-related steps
+6. If user sentiment is frustrated, include a "I need help" option
+7. Always include a "Where is it?" option if the AI is telling them to look for the Forgot Username link or Forgot Password link
+8. Always have a positive outcome option like "Found it!" or "Trying now" if the AI is asking about checking email or finding something
 
 RESPONSE PATTERNS BY QUESTION TYPE:
 - "What happens when...?" → What the user sees/experiences
@@ -333,9 +559,9 @@ Generate ONLY the JSON, no explanations.`;
 
       // Validate and enhance the outcomes
       if (parsedOutcomes.options && Array.isArray(parsedOutcomes.options)) {
-        // Limit to 3 options max and ensure quality
+        // Limit to 4 options max and ensure quality
         parsedOutcomes.options = parsedOutcomes.options
-          .slice(0, 3)
+          .slice(0, 4)
           .map((opt: any) => ({
             ...opt,
             text: opt.text.substring(0, 50),
@@ -349,14 +575,30 @@ Generate ONLY the JSON, no explanations.`;
 
         if (
           !hasEmailOption &&
-          (currentState.includes("email") ||
-            currentState.includes("validation"))
+          (currentContext.state.includes("email") ||
+            currentContext.state.includes("validation")) &&
+          currentContext.stuckIndicators > 1
         ) {
           parsedOutcomes.options.push({
             id: "different_email",
             text: "Try different email?",
             action: "Try different email?",
             color: "bg-blue-50 border-blue-200 hover:border-blue-400",
+          });
+        }
+
+        // Add help option if user is frustrated
+        if (
+          currentContext.userSentiment === "frustrated" &&
+          !parsedOutcomes.options.some((opt: any) =>
+            opt.text.toLowerCase().includes("help")
+          )
+        ) {
+          parsedOutcomes.options.push({
+            id: "need_help",
+            text: "I need help",
+            action: "I need help",
+            color: "bg-purple-50 border-purple-200 hover:border-purple-400",
           });
         }
       }
@@ -366,16 +608,19 @@ Generate ONLY the JSON, no explanations.`;
       console.error("Failed to parse AI-generated outcomes:", parseError);
       console.error("Raw AI response:", outcomeResponse);
       console.error("Cleaned response:", cleanedResponse);
-      return getIntelligentFallbackOptions(currentState, aiResponse);
+      return getIntelligentFallbackOptions(currentContext, aiResponse);
     }
   } catch (error) {
     console.error("Error generating AI outcomes:", error);
-    return getIntelligentFallbackOptions(currentState, aiResponse);
+    return getIntelligentFallbackOptions(currentContext, aiResponse);
   }
 }
 
-// Intelligent fallback options based on state and context
-function getIntelligentFallbackOptions(state: string, aiResponse: string): any {
+// Enhanced intelligent fallback options
+function getIntelligentFallbackOptions(
+  context: ConversationContext,
+  aiResponse: string
+): any {
   const lowerResponse = aiResponse.toLowerCase();
 
   // Analyze what the AI is asking about
@@ -383,7 +628,10 @@ function getIntelligentFallbackOptions(state: string, aiResponse: string): any {
     lowerResponse.includes("what happens") ||
     lowerResponse.includes("what message")
   ) {
-    if (state.includes("validation") || state.includes("email")) {
+    if (
+      context.state.includes("validation") ||
+      context.state.includes("email")
+    ) {
       return {
         options: [
           {
@@ -438,28 +686,38 @@ function getIntelligentFallbackOptions(state: string, aiResponse: string): any {
   }
 
   if (lowerResponse.includes("have you") || lowerResponse.includes("did you")) {
-    return {
-      options: [
-        {
-          id: "yes",
-          text: "Yes",
-          action: "Yes",
-          color: "bg-green-50 border-green-200 hover:border-green-400",
-        },
-        {
-          id: "no",
-          text: "Not yet",
-          action: "Not yet",
-          color: "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
-        },
-        {
-          id: "tried",
-          text: "Tried but didn't work",
-          action: "Tried but didn't work",
-          color: "bg-red-50 border-red-200 hover:border-red-400",
-        },
-      ],
-    };
+    const options = [
+      {
+        id: "yes",
+        text: "Yes",
+        action: "Yes",
+        color: "bg-green-50 border-green-200 hover:border-green-400",
+      },
+      {
+        id: "no",
+        text: "Not yet",
+        action: "Not yet",
+        color: "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
+      },
+      {
+        id: "tried",
+        text: "Tried but didn't work",
+        action: "Tried but didn't work",
+        color: "bg-red-50 border-red-200 hover:border-red-400",
+      },
+    ];
+
+    // Add help option if frustrated
+    if (context.userSentiment === "frustrated") {
+      options.push({
+        id: "help",
+        text: "I need help",
+        action: "I need help",
+        color: "bg-purple-50 border-purple-200 hover:border-purple-400",
+      });
+    }
+
+    return { options };
   }
 
   // Default to text input if no good match
@@ -467,81 +725,129 @@ function getIntelligentFallbackOptions(state: string, aiResponse: string): any {
 }
 
 // Enhanced response generation for each state
-function getResponseForState(state: string): string {
+function getResponseForState(
+  state: string,
+  context?: ConversationContext
+): {
+  message: string;
+  image?: MessageImage;
+} {
+  const image = STEP_IMAGES[state as keyof typeof STEP_IMAGES];
+
+  // Add sentiment-aware modifications
+  const sentimentPrefix =
+    context?.userSentiment === "frustrated"
+      ? "I understand this is frustrating, but don't worry - "
+      : "";
+
   switch (state) {
     case "initial":
-      return `Hey there! I'm here to help you get back into your UHCC continuing education account.
+      return {
+        message: `Hey there! I'm here to help you get back into your UHCC continuing education account.
 
 What's happening when you try to log in? Are you getting some kind of error message?
 
-**Quick tip:** If you're getting a login error, we'll start by checking if your email's in the system using the "I am a new user" section on the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.`;
+**Quick tip:** If you're getting a login error, we'll start by checking if your email's in the system using the "I am a new user" section on the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.`,
+        image,
+      };
 
     case "has_login_error":
-      return `I see you're getting a login error - that's frustrating! Don't worry, we can fix this with a simple 6-step process.
+      return {
+        message: `${sentimentPrefix}I see you're getting a login error - that's frustrating! Don't worry, we can fix this with a simple 6-step process.
 
 First, let's check if your email is in the system. Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and look for the RIGHT SIDE where it says "I am a new user" - click there and enter your email.
 
-What happens when you do that?`;
+What happens when you do that?`,
+        image,
+      };
 
     case "checking_email_validation":
-      return `Perfect! You're testing your email in the "I am a new user" section.
+      return {
+        message: `Perfect! You're testing your email in the "I am a new user" section.
 
 Remember, we want to see a validation error here - that means your email IS in the system. If it just asks for contact info, your email isn't registered.
 
-What message appears after you enter your email?`;
+What message appears after you enter your email?`,
+        image,
+      };
 
     case "email_validated_ready_for_username":
-      return `🎉 **EXCELLENT!** That validation error is exactly what we wanted! Your email IS in the system.
+      return {
+        message: `🎉 **EXCELLENT!** That validation error is exactly what we wanted! Your email IS in the system.
 
 Now for Step 2: Go back to the LEFT side ("I am an existing user") and click "Forgot Username". Enter that same email address. The system will send your username to your email.
 
-Have you tried that yet?`;
+Have you tried that yet?`,
+        image,
+      };
 
     case "username_email_sent":
-      return `Great! Step 3 now: Check your email inbox and spam folder for the username email from UHCC.
+      return {
+        message: `Great! Step 3 now: Check your email inbox and spam folder for the username email from UHCC.
 
 Once you find your username in that email, we'll move to Step 4 (password reset).
 
-Did you find the email with your username?`;
+Did you find the email with your username?`,
+        image,
+      };
 
     case "ready_for_password_reset":
-      return `Perfect! Now for Step 4: Go to the "Forgot Password" page and enter the username you just got from your email.
+      return {
+        message: `Perfect! Now for Step 4: Go to the "Forgot Password" page and enter the username you just got from your email.
 
 This will send a password reset link to your email for Step 5.
 
-How did that go?`;
+How did that go?`,
+        image,
+      };
 
     case "password_reset_in_progress":
-      return `Almost there! Step 5: Check your email (and spam folder) for the password reset email from UHCC.
+      return {
+        message: `Almost there! Step 5: Check your email (and spam folder) for the password reset email from UHCC.
 
 Click the reset link in that email and set your new password. After that, you can log in on the LEFT side ("I am an existing user") of the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> with your username and new password.
 
-Were you able to reset your password?`;
+Were you able to reset your password?`,
+        image,
+      };
 
     case "restart_needed":
-      return `No problem! Let's start fresh with a different email address.
+      const emailList = context?.attemptedEmails?.length
+        ? `\n\nYou've tried: ${context.attemptedEmails.join(", ")}`
+        : "";
 
-Sometimes the email you think you used isn't the one in the system. Let's go back to Step 1 and try a different email.
+      return {
+        message: `${sentimentPrefix}No problem! Let's start fresh with a different email address.
+
+Sometimes the email you think you used isn't the one in the system. Let's go back to Step 1 and try a different email.${emailList}
 
 Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and use the "I am a new user" section on the RIGHT SIDE to test a different email address.
 
-What other email addresses might you have used when you first registered?`;
+What other email addresses might you have used when you first registered?`,
+        image: CONTEXTUAL_IMAGES.contact_form, // Show contact form image when restarting
+      };
 
     case "process_complete":
-      return `🎉 **SUCCESS!** You're all set! You can now log in anytime using:
+      return {
+        message: `🎉 **SUCCESS!** You're all set! You can now log in anytime using:
 • Username: (from the first email)
 • Password: (your new password)
 
 Just use the LEFT side ("I am an existing user") of the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.
 
-Is there anything else I can help you with?`;
+Is there anything else I can help you with?`,
+        image,
+      };
 
     default:
-      return `Hey! I'm here to help with UHCC portal login issues. What's happening when you try to log in?
+      return {
+        message: `Hey! I'm here to help with UHCC portal login issues. What's happening when you try to log in?
 
 If this is about something other than portal login problems, please contact:
 
-${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`;
+${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`,
+        image,
+      };
   }
 }
 
@@ -550,8 +856,10 @@ export async function POST(req: Request) {
     const { message, messages, chatId } = await req.json();
 
     if (!message?.trim()) {
+      const initialResponse = getResponseForState("initial");
       return NextResponse.json({
-        message: getResponseForState("initial"),
+        message: initialResponse.message,
+        image: initialResponse.image,
         showInput: true,
       });
     }
@@ -559,10 +867,12 @@ export async function POST(req: Request) {
     const url = message.match(urlPattern);
     const userQuery = message.replace(url ? url[0] : "", "").trim();
 
-    // Get current state based on conversation history
-    const currentState = getUserState(messages);
-
-    const baseResponse = getResponseForState(currentState);
+    // Get enhanced context based on conversation history
+    const conversationContext = analyzeUserState(messages);
+    const stateResponse = getResponseForState(
+      conversationContext.state,
+      conversationContext
+    );
     let pageContext = "";
 
     if (url) {
@@ -613,6 +923,15 @@ CORE BEHAVIOR PRINCIPLES:
 - Remember the ENTIRE conversation context to provide personalized help
 - Use natural language with contractions and casual tone
 
+CURRENT USER CONTEXT:
+- State: ${conversationContext.state}
+- Step Number: ${conversationContext.stepNumber} of 6
+- User Sentiment: ${conversationContext.userSentiment}
+- Stuck Indicators: ${conversationContext.stuckIndicators}
+- Attempted Emails: ${conversationContext.attemptedEmails.join(", ") || "none yet"}
+- Last Successful Step: ${conversationContext.lastSuccessfulStep}
+${pageContext ? `- Page Context: ${pageContext}` : ""}
+
 THE 6-STEP UHCC PORTAL RESET PROCESS:
 1. Email Validation: "I am a new user" section (RIGHT side) → validation error = GOOD (email exists)
 2. Username Reset: "I am an existing user" section (LEFT side) → Forgot Username → email sent
@@ -628,15 +947,10 @@ CRITICAL UNDERSTANDING:
 - Emails often go to spam - always remind to check spam folder
 - Some users get stuck in loops - recognize patterns and suggest restart
 
-INTELLIGENT RESPONSES BASED ON USER STATE:
-Current user state: ${currentState}
-${pageContext ? `Page context: ${pageContext}` : ""}
-
-CONVERSATION MEMORY:
-- Track which steps user has attempted
-- Remember specific errors or messages they've mentioned
-- Notice if they're repeating actions without progress
-- Identify when they need to restart with different email
+SENTIMENT-AWARE RESPONSES:
+- If frustrated: Acknowledge frustration, be extra encouraging, offer direct help
+- If positive: Match their energy, celebrate progress
+- If neutral: Stay helpful and guide to next step
 
 RESPONSE GUIDELINES:
 - Only mention the step number they're currently on
@@ -680,12 +994,20 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
     ];
 
     const aiResponse = await getGroqResponse(aiMessages);
-    const finalResponse = aiResponse || baseResponse;
+    const finalResponse = aiResponse || stateResponse.message;
+
+    // Select the best image based on full context
+    const selectedImage = selectBestImage(
+      conversationContext,
+      finalResponse,
+      message,
+      pageContext
+    );
 
     // Generate intelligent expected outcomes
     const expectedOutcomes = await generateAIExpectedOutcomes(
       finalResponse,
-      currentState,
+      conversationContext,
       messages
     );
 
@@ -693,14 +1015,26 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
     const updatedMessages = [
       ...messages,
       { role: "user", content: message },
-      { role: "assistant", content: finalResponse },
+      {
+        role: "assistant",
+        content: finalResponse,
+        image: selectedImage,
+        context: conversationContext, // Save context for debugging
+      },
     ];
 
     await saveConversation(chatId, updatedMessages);
 
     return NextResponse.json({
       message: finalResponse,
+      image: selectedImage, // Use intelligently selected image
       ...expectedOutcomes,
+      debug: {
+        state: conversationContext.state,
+        step: conversationContext.stepNumber,
+        sentiment: conversationContext.userSentiment,
+        attemptedEmails: conversationContext.attemptedEmails.length,
+      },
     });
   } catch (error) {
     console.error("Error in portal support:", error);

@@ -13,11 +13,22 @@ import {
   MessageCircleIcon,
 } from "lucide-react";
 
+type MessageImage = {
+  id: string;
+  src: string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+};
+
+// 3. Update Message type to use single image:
 type Message = {
   role: "user" | "assistant";
   content: string;
   options?: Option[];
   showInput?: boolean;
+  image?: MessageImage; // Changed from images to image
 };
 
 type Option = {
@@ -115,10 +126,11 @@ export default function UHCCPortalSupport() {
   // Initial troubleshooting options for homepage
   const quickActions: QuickAction[] = [
     {
-      title: "I can't log in - getting validation error",
+      title:
+        "I can't log in - I can't remember the correct username or password",
       description: "Getting 'Invalid email address and/or password' error",
       action:
-        "I'm getting a validation error when I try to log in. It says 'Invalid email address and/or password, please try again.' https://ce.uhcc.hawaii.edu/portal/logon.do?method=load",
+        "I can't log in - I can't remember the correct username or password. It says 'Invalid email address and/or password, please try again.' https://ce.uhcc.hawaii.edu/portal/logon.do?method=load",
       icon: <AlertCircleIcon size={20} />,
       color: "bg-red-50 border-red-300 hover:border-red-500",
     },
@@ -269,12 +281,13 @@ export default function UHCCPortalSupport() {
 
       const data = await response.json();
 
-      // Add assistant's response
+      // Add assistant's response with images
       const assistantMessage = {
         role: "assistant" as const,
         content: data.message,
         options: data.options,
         showInput: data.showInput,
+        image: data.image, // Include image from API response
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];
@@ -342,8 +355,11 @@ export default function UHCCPortalSupport() {
     setShowChat(true);
   };
 
-  const formatMessage = (content: string) => {
-    return content.split("\n").map((line, i) => {
+  const formatMessage = (content: string, image?: MessageImage) => {
+    const messageElements = [];
+
+    // Add text content first
+    const textContent = content.split("\n").map((line, i) => {
       // Handle headers with **Header**
       if (
         line.trim().startsWith("**") &&
@@ -401,6 +417,45 @@ export default function UHCCPortalSupport() {
         <div key={i} className="h-2" />
       );
     });
+
+    messageElements.push(<div key="content">{textContent}</div>);
+
+    // Add single image at the bottom if it exists
+    if (image) {
+      messageElements.push(
+        <div key="image" className="mt-4">
+          <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm max-w-md">
+            <img
+              src={image.src}
+              alt={image.alt}
+              className="w-full h-auto"
+              style={{
+                width: image.width || "auto",
+                height: image.height || "auto",
+                maxHeight: "250px", // Reduced from 400px to 250px
+                objectFit: "contain",
+              }}
+              onError={e => {
+                // Hide image container if it fails to load
+                const container = e.currentTarget.closest(".border");
+                if (container) {
+                  (container as HTMLElement).style.display = "none";
+                }
+              }}
+            />
+            {image.caption && (
+              <div className="p-2 bg-amber-50 border-t border-amber-200">
+                <p className="text-xs text-amber-800 font-medium">
+                  {image.caption}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return messageElements;
   };
 
   // Check if conversation is complete (contains contact info)
@@ -774,7 +829,7 @@ export default function UHCCPortalSupport() {
                     >
                       {msg.role === "assistant" ? (
                         <div className="prose prose-sm max-w-none">
-                          {formatMessage(msg.content)}
+                          {formatMessage(msg.content, msg.image)}
                         </div>
                       ) : (
                         <div className="whitespace-pre-wrap">{msg.content}</div>
