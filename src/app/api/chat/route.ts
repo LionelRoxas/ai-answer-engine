@@ -131,7 +131,7 @@ const STEP_IMAGES = {
     src: "/images/steps/portal-login-page.png",
     alt: "UHCC Portal Login Page",
     caption: "The main UHCC portal login page",
-    keywords: ["portal", "login", "main", "start", "beginning"],
+    keywords: ["portal", "login page", "main", "start", "beginning"],
     stepNumber: 0,
   },
   has_login_error: {
@@ -176,7 +176,8 @@ const STEP_IMAGES = {
     id: "forgot_password_page",
     src: "/images/steps/forgot-password-page.PNG",
     alt: "Forgot Password page",
-    caption: "Enter your username here to get password reset link",
+    caption:
+      "Click this link, then enter your username to get password reset link",
     keywords: ["forgot password", "username", "password reset"],
     stepNumber: 4,
   },
@@ -184,7 +185,7 @@ const STEP_IMAGES = {
     id: "password_reset_email",
     src: "/images/steps/password-reset-email.PNG",
     alt: "Password reset email",
-    caption: "Click the reset link in your email",
+    caption: "Check your inbox again, then click the reset link in your email",
     keywords: ["reset link", "password email", "reset password"],
     stepNumber: 5,
   },
@@ -225,7 +226,123 @@ const CONTEXTUAL_IMAGES = {
   },
 };
 
-// Enhanced state detection with context tracking
+// Intelligent image selector based on context
+function selectBestImage(
+  context: ConversationContext,
+  aiResponse: string,
+  userMessage: string,
+  pageContext: string
+): MessageImage {
+  const combinedContext =
+    `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
+
+  // Priority 1: Direct instruction matching
+  // Check what the AI is actually telling the user to do RIGHT NOW
+  const instructionPatterns = [
+    {
+      patterns: [
+        "i am a new user",
+        "right side",
+        "check if your email",
+        "test your email",
+        "enter your email",
+        "try a different email",
+        "test a different email",
+      ],
+      image: STEP_IMAGES.checking_email_validation,
+    },
+    {
+      patterns: [
+        "validation error",
+        "existing student record",
+        "email is in the system",
+        "that's exactly what we wanted",
+      ],
+      image: STEP_IMAGES.email_validated_ready_for_username,
+    },
+    {
+      patterns: [
+        "forgot username",
+        'click "forgot username"',
+        "go back to the left side",
+        "i am an existing user",
+      ],
+      image: CONTEXTUAL_IMAGES.forgot_username_link,
+    },
+    {
+      patterns: [
+        "check your email",
+        "check your inbox",
+        "spam folder",
+        "username email",
+        "find your username",
+      ],
+      image: STEP_IMAGES.username_email_sent,
+    },
+    {
+      patterns: [
+        "forgot password",
+        "password reset",
+        "enter the username",
+        "enter your username",
+      ],
+      image: STEP_IMAGES.ready_for_password_reset,
+    },
+    {
+      patterns: [
+        "reset link",
+        "password reset email",
+        "set your new password",
+        "click the reset link",
+      ],
+      image: STEP_IMAGES.password_reset_in_progress,
+    },
+    {
+      patterns: [
+        "contact form",
+        "email isn't in the system",
+        "email not found",
+        "try different email",
+      ],
+      image: CONTEXTUAL_IMAGES.contact_form,
+    },
+    {
+      patterns: ["successfully", "logged in", "you're all set", "success!"],
+      image: STEP_IMAGES.process_complete,
+    },
+    {
+      patterns: ["login error", "getting an error", "can't log in"],
+      image: STEP_IMAGES.has_login_error,
+    },
+  ];
+
+  // Check each pattern group in order
+  for (const patternGroup of instructionPatterns) {
+    for (const pattern of patternGroup.patterns) {
+      if (combinedContext.includes(pattern)) {
+        return patternGroup.image;
+      }
+    }
+  }
+
+  // Priority 2: Check contextual images
+  for (const image of Object.values(CONTEXTUAL_IMAGES)) {
+    if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
+      return image;
+    }
+  }
+
+  // Priority 3: State-based fallback
+  const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
+  if (stateImage) {
+    return stateImage;
+  }
+
+  // Priority 4: Default to initial
+  return STEP_IMAGES.initial;
+}
+
+// Enhanced state detection that better tracks back-and-forth movement
 function analyzeUserState(messages: any[]): ConversationContext {
   const context: ConversationContext = {
     state: "initial",
@@ -240,9 +357,15 @@ function analyzeUserState(messages: any[]): ConversationContext {
     .map(m => m.content?.toLowerCase() || "")
     .join(" ");
 
-  // Track what steps have been mentioned/completed
   const messageHistory = messages.map(m => m.content?.toLowerCase() || "");
   const lastFewMessages = messageHistory.slice(-3).join(" ");
+
+  // Get the most recent AI message to understand current instruction
+  const lastAIMessage =
+    messages
+      .filter(m => m.role === "assistant")
+      .pop()
+      ?.content?.toLowerCase() || "";
 
   // Extract attempted emails
   messages.forEach(msg => {
@@ -287,143 +410,114 @@ function analyzeUserState(messages: any[]): ConversationContext {
     context.userSentiment = "positive";
   }
 
-  // Original state detection logic preserved
+  // Determine current step based on what AI is currently instructing
   if (
-    lastFewMessages.includes("start over") ||
-    lastFewMessages.includes("try different email") ||
-    lastFewMessages.includes("wrong email") ||
-    lastFewMessages.includes("different email") ||
-    lastFewMessages.includes("not working") ||
-    lastFewMessages.includes("still not getting") ||
-    lastFewMessages.includes("not receiving") ||
-    lastFewMessages.includes("nothing in spam")
-  ) {
-    context.state = "restart_needed";
-    return context;
-  }
-
-  // Step 6: Successfully completed
-  if (
-    allMessages.includes("successfully") &&
-    (allMessages.includes("logged in") ||
-      allMessages.includes("reset password") ||
-      allMessages.includes("i'm in") ||
-      allMessages.includes("it worked"))
-  ) {
-    context.state = "process_complete";
-    context.stepNumber = 6;
-    context.lastSuccessfulStep = 6;
-    return context;
-  }
-
-  // Continue with all original state checks...
-  if (
-    allMessages.includes("password reset") &&
-    (allMessages.includes("email") ||
-      allMessages.includes("link") ||
-      allMessages.includes("got the reset"))
-  ) {
-    context.state = "password_reset_in_progress";
-    context.stepNumber = 5;
-    context.lastSuccessfulStep = 4;
-  } else if (
-    allMessages.includes("got my username") ||
-    allMessages.includes("have username") ||
-    allMessages.includes("received username") ||
-    allMessages.includes("found my username") ||
-    allMessages.includes("username from email") ||
-    allMessages.includes("found it!")
-  ) {
-    context.state = "ready_for_password_reset";
-    context.stepNumber = 4;
-    context.lastSuccessfulStep = 3;
-  } else if (
-    allMessages.includes("username") &&
-    (allMessages.includes("sent") ||
-      allMessages.includes("check your email") ||
-      allMessages.includes("email sent"))
-  ) {
-    context.state = "username_email_sent";
-    context.stepNumber = 3;
-    context.lastSuccessfulStep = 2;
-  } else if (
-    allMessages.includes("existing student record") ||
-    allMessages.includes("validation error") ||
-    allMessages.includes("email exists") ||
-    allMessages.includes("email is in the system") ||
-    (allMessages.includes("error") && allMessages.includes("good"))
-  ) {
-    context.state = "email_validated_ready_for_username";
-    context.stepNumber = 2;
-    context.lastSuccessfulStep = 1;
-  } else if (
-    lastFewMessages.includes("new user") ||
-    lastFewMessages.includes("right side") ||
-    lastFewMessages.includes("checking email")
+    lastAIMessage.includes("i am a new user") ||
+    lastAIMessage.includes("right side") ||
+    lastAIMessage.includes("test your email") ||
+    lastAIMessage.includes("try a different email")
   ) {
     context.state = "checking_email_validation";
     context.stepNumber = 1;
   } else if (
-    allMessages.includes("invalid email") ||
-    allMessages.includes("invalid password") ||
-    allMessages.includes("login error") ||
-    allMessages.includes("can't log in") ||
-    allMessages.includes("won't let me") ||
-    allMessages.includes("locked out")
+    lastAIMessage.includes("validation error") &&
+    lastAIMessage.includes("excellent")
   ) {
-    context.state = "has_login_error";
+    context.state = "email_validated_ready_for_username";
+    context.stepNumber = 2;
+  } else if (
+    lastAIMessage.includes("forgot username") ||
+    lastAIMessage.includes("left side")
+  ) {
+    context.state = "email_validated_ready_for_username";
+    context.stepNumber = 2;
+  } else if (
+    lastAIMessage.includes("check your email") &&
+    lastAIMessage.includes("username")
+  ) {
+    context.state = "username_email_sent";
+    context.stepNumber = 3;
+  } else if (lastAIMessage.includes("forgot password")) {
+    context.state = "ready_for_password_reset";
+    context.stepNumber = 4;
+  } else if (
+    lastAIMessage.includes("reset link") ||
+    lastAIMessage.includes("password reset email")
+  ) {
+    context.state = "password_reset_in_progress";
+    context.stepNumber = 5;
+  } else if (
+    lastAIMessage.includes("success") &&
+    lastAIMessage.includes("logged")
+  ) {
+    context.state = "process_complete";
+    context.stepNumber = 6;
+  }
+
+  // Check for restart scenarios
+  if (
+    lastFewMessages.includes("start over") ||
+    lastFewMessages.includes("try different email") ||
+    lastFewMessages.includes("wrong email") ||
+    lastFewMessages.includes("contact form") ||
+    (lastAIMessage.includes("different email") &&
+      lastAIMessage.includes("i am a new user"))
+  ) {
+    context.state = "restart_needed";
+    // Keep the step number at 1 since we're going back to email validation
     context.stepNumber = 1;
   }
 
-  return context;
-}
-
-// Intelligent image selector based on context
-function selectBestImage(
-  context: ConversationContext,
-  aiResponse: string,
-  userMessage: string,
-  pageContext: string
-): MessageImage {
-  const combinedContext =
-    `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
-
-  // First, check for contextual images
-  for (const image of Object.values(CONTEXTUAL_IMAGES)) {
-    if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
-      return image;
-    }
-  }
-
-  // Then check state-based images with keyword matching
-  const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
-  if (stateImage) {
-    // Verify it's the right image by checking keywords
+  // Original user response patterns for state detection
+  if (!context.state || context.state === "initial") {
     if (
-      stateImage.keywords &&
-      stateImage.keywords.some(keyword => combinedContext.includes(keyword))
+      allMessages.includes("successfully") &&
+      (allMessages.includes("logged in") ||
+        allMessages.includes("reset password") ||
+        allMessages.includes("i'm in") ||
+        allMessages.includes("it worked"))
     ) {
-      return stateImage;
+      context.state = "process_complete";
+      context.stepNumber = 6;
+      context.lastSuccessfulStep = 6;
+    } else if (
+      allMessages.includes("password reset") &&
+      (allMessages.includes("email") ||
+        allMessages.includes("link") ||
+        allMessages.includes("got the reset"))
+    ) {
+      context.state = "password_reset_in_progress";
+      context.stepNumber = 5;
+      context.lastSuccessfulStep = 4;
+    } else if (
+      allMessages.includes("got my username") ||
+      allMessages.includes("have username") ||
+      allMessages.includes("received username") ||
+      allMessages.includes("found my username")
+    ) {
+      context.state = "ready_for_password_reset";
+      context.stepNumber = 4;
+      context.lastSuccessfulStep = 3;
+    } else if (
+      allMessages.includes("existing student record") ||
+      allMessages.includes("validation error") ||
+      allMessages.includes("email exists")
+    ) {
+      context.state = "email_validated_ready_for_username";
+      context.stepNumber = 2;
+      context.lastSuccessfulStep = 1;
+    } else if (
+      allMessages.includes("invalid email") ||
+      allMessages.includes("invalid password") ||
+      allMessages.includes("login error") ||
+      allMessages.includes("can't log in")
+    ) {
+      context.state = "has_login_error";
+      context.stepNumber = 1;
     }
   }
 
-  // Fallback to step number matching
-  const stepImages = Object.values(STEP_IMAGES).filter(
-    img => img.stepNumber === context.stepNumber
-  );
-  if (stepImages.length > 0) {
-    // Find best match by keywords
-    const bestMatch = stepImages.find(
-      img =>
-        img.keywords &&
-        img.keywords.some(keyword => combinedContext.includes(keyword))
-    );
-    if (bestMatch) return bestMatch;
-    return stepImages[0]; // Default to first image for that step
-  }
-
-  // Ultimate fallback
-  return stateImage || STEP_IMAGES.initial;
+  return context;
 }
 
 // Enhanced response generation with sentiment awareness
