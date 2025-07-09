@@ -172,6 +172,14 @@ const STEP_IMAGES = {
     keywords: ["check email", "inbox", "spam", "username email"],
     stepNumber: 3,
   },
+  look_for_forgot_username_link_on_email: {
+    id: "forgot_username_link",
+    src: "/images/steps/forgot-username-link.PNG",
+    alt: "Forgot Username link",
+    caption: "This is what the reset username email looks like. Look for the 'Your user name is' section inside that email.",
+    keywords: ["forgot username", "email", "link"],
+    stepNumber: 3,
+  },
   ready_for_password_reset: {
     id: "forgot_password_page",
     src: "/images/steps/forgot-password-page.PNG",
@@ -185,7 +193,7 @@ const STEP_IMAGES = {
     id: "password_reset_email",
     src: "/images/steps/password-reset-email.PNG",
     alt: "Password reset email",
-    caption: "Check your inbox again, then click the reset link in your email",
+    caption: "This is what the reset password email looks like. Once you receive it, check your inbox, then click the reset link in your email",
     keywords: ["reset link", "password email", "reset password"],
     stepNumber: 5,
   },
@@ -226,7 +234,144 @@ const CONTEXTUAL_IMAGES = {
   },
 };
 
-// Intelligent image selector based on context
+// Update the getResponseForState function to include scenarios where this image would be helpful
+function getResponseForState(
+  state: string,
+  context?: ConversationContext
+): {
+  message: string;
+  image?: MessageImage;
+} {
+  const image = STEP_IMAGES[state as keyof typeof STEP_IMAGES];
+
+  // Add sentiment-aware modifications
+  const sentimentPrefix =
+    context?.userSentiment === "frustrated"
+      ? "I understand this is frustrating, but don't worry - "
+      : "";
+
+  switch (state) {
+    case "initial":
+      return {
+        message: `Hey there! I'm here to help you get back into your UHCC continuing education account.
+
+What's happening when you try to log in? Are you getting some kind of error message?
+
+**Quick tip:** If you're getting a login error, we'll start by checking if your email's in the system using the "I am a new user" section on the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.`,
+        image,
+      };
+
+    case "has_login_error":
+      return {
+        message: `${sentimentPrefix}I see you're getting a login error - that's frustrating! Don't worry, we can fix this with a simple 6-step process.
+
+First, let's check if your email is in the system. Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and look for the RIGHT SIDE where it says "I am a new user" - click there and enter your email.
+
+What happens when you do that?`,
+        image,
+      };
+
+    case "checking_email_validation":
+      return {
+        message: `Perfect! You're testing your email in the "I am a new user" section.
+
+Remember, we want to see a validation error here - that means your email IS in the system. If it just asks for contact info, your email isn't registered.
+
+What message appears after you enter your email?`,
+        image,
+      };
+
+    case "email_validated_ready_for_username":
+      return {
+        message: `🎉 **EXCELLENT!** That validation error is exactly what we wanted! Your email IS in the system.
+
+Now for Step 2: Go back to the LEFT side ("I am an existing user") and click "Forgot Username". Enter that same email address. The system will send your username to your email.
+
+Have you tried that yet?`,
+        image,
+      };
+
+    case "username_email_sent":
+      return {
+        message: `Great! Step 3 now: Check your email inbox and spam folder for the username email from UHCC.
+
+Once you find your username in that email, we'll move to Step 4 (password reset).
+
+Did you find the email with your username?`,
+        image,
+      };
+
+    case "looking_for_username_link":
+      return {
+        message: `I see you found the email! Now look for the "Forgot Username" link inside that email - it should be clearly visible.
+
+Click that link to see your username. Once you have your username, we can move to the password reset step.
+
+Were you able to find the link and get your username?`,
+        image: STEP_IMAGES.look_for_forgot_username_link_on_email,
+      };
+
+    case "ready_for_password_reset":
+      return {
+        message: `Perfect! Now for Step 4: Go to the "Forgot Password" page and enter the username you just got from your email.
+
+This will send a password reset link to your email for Step 5.
+
+How did that go?`,
+        image,
+      };
+
+    case "password_reset_in_progress":
+      return {
+        message: `Almost there! Step 5: Check your email (and spam folder) for the password reset email from UHCC.
+
+Click the reset link in that email and set your new password. After that, you can log in on the LEFT side ("I am an existing user") of the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> with your username and new password.
+
+Were you able to reset your password?`,
+        image,
+      };
+
+    case "restart_needed":
+      const emailList = context?.attemptedEmails?.length
+        ? `\n\nYou've tried: ${context.attemptedEmails.join(", ")}`
+        : "";
+
+      return {
+        message: `${sentimentPrefix}No problem! Let's start fresh with a different email address.
+
+Sometimes the email you think you used isn't the one in the system. Let's go back to Step 1 and try a different email.${emailList}
+
+Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and use the "I am a new user" section on the RIGHT SIDE to test a different email address.
+
+What other email addresses might you have used when you first registered?`,
+        image: CONTEXTUAL_IMAGES.contact_form,
+      };
+
+    case "process_complete":
+      return {
+        message: `🎉 **SUCCESS!** You're all set! You can now log in anytime using:
+• Username: (from the first email)
+• Password: (your new password)
+
+Just use the LEFT side ("I am an existing user") of the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.
+
+Is there anything else I can help you with?`,
+        image,
+      };
+
+    default:
+      return {
+        message: `Hey! I'm here to help with UHCC portal login issues. What's happening when you try to log in?
+
+If this is about something other than portal login problems, please contact:
+
+${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`,
+        image,
+      };
+  }
+}
+
+// Updated selectBestImage function with better step 5 handling
 function selectBestImage(
   context: ConversationContext,
   aiResponse: string,
@@ -236,7 +381,95 @@ function selectBestImage(
   const combinedContext =
     `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
 
-  // Priority 1: Direct instruction matching
+  // Priority 1: Check user's response first for specific outcomes
+  // This ensures we show the right image based on what happened
+  const userMessagePatterns = [
+    {
+      patterns: [
+        "contact info",
+        "contact information",
+        "contact form",
+        "asks for my name",
+        "asks for address",
+        "contact details",
+        "personal information form",
+      ],
+      image: CONTEXTUAL_IMAGES.contact_form,
+    },
+    {
+      // Patterns for when user is confused about finding username in email (Step 3)
+      patterns: [
+        "where is it",
+        "what does it look like",
+        "show me what the email looks like",
+        "can't find it",
+        "don't see it",
+        "where's the username",
+        "what am i looking for",
+        "show me",
+        "can you show me what the email looks like",
+      ],
+      // Only apply this if we're in the username email context AND NOT password reset
+      contextRequired: ["username", "check your"],
+      contextExclude: ["password", "reset"],
+      stepNumber: 3,
+      image: STEP_IMAGES.look_for_forgot_username_link_on_email,
+    },
+    {
+      // Patterns for when user is confused about password reset email (Step 5)
+      patterns: [
+        "where is it",
+        "what does it look like",
+        "show me what the email looks like",
+        "can't find it",
+        "don't see it",
+        "where's the reset",
+        "what am i looking for",
+        "show me",
+        "password email",
+        "can you show me what the email looks like",
+      ],
+      // Only apply this if we're in password reset context
+      contextRequired: ["password", "reset", "email"],
+      stepNumber: 5,
+      image: STEP_IMAGES.password_reset_in_progress,
+    },
+  ];
+
+  // Check user message patterns first
+  for (const patternGroup of userMessagePatterns) {
+    for (const pattern of patternGroup.patterns) {
+      if (userMessage.toLowerCase().includes(pattern)) {
+        // Check if context is required
+        if (patternGroup.contextRequired) {
+          const hasRequiredContext = patternGroup.contextRequired.some(req =>
+            combinedContext.includes(req)
+          );
+
+          // Check if there are excluded contexts
+          let hasExcludedContext = false;
+          if (patternGroup.contextExclude) {
+            hasExcludedContext = patternGroup.contextExclude.some(exclude =>
+              combinedContext.includes(exclude)
+            );
+          }
+
+          // Check step number if specified
+          const stepMatches =
+            !patternGroup.stepNumber ||
+            context.stepNumber === patternGroup.stepNumber;
+
+          if (hasRequiredContext && !hasExcludedContext && stepMatches) {
+            return patternGroup.image;
+          }
+        } else {
+          return patternGroup.image;
+        }
+      }
+    }
+  }
+
+  // Priority 2: Direct instruction matching
   // Check what the AI is actually telling the user to do RIGHT NOW
   const instructionPatterns = [
     {
@@ -266,7 +499,9 @@ function selectBestImage(
         'click "forgot username"',
         "go back to the left side",
         "i am an existing user",
+        "left side",
       ],
+      excludeSteps: [5, 6], // Don't use this image at steps 5 or 6
       image: CONTEXTUAL_IMAGES.forgot_username_link,
     },
     {
@@ -274,40 +509,65 @@ function selectBestImage(
         "check your email",
         "check your inbox",
         "spam folder",
-        "username email",
         "find your username",
+        "looking for the username email",
       ],
+      contextRequired: ["username"],
+      excludeSteps: [5], // Don't use this for step 5
       image: STEP_IMAGES.username_email_sent,
     },
     {
       patterns: [
-        "forgot password",
-        "password reset",
-        "enter the username",
-        "enter your username",
+        "look for the forgot username link",
+        "find the link in the email",
+        "username link in your email",
+        "click the link in the email",
+        "forgot username link in the email",
+        "inside the email",
+        "in that email",
       ],
-      image: STEP_IMAGES.ready_for_password_reset,
+      excludeSteps: [5],
+      image: STEP_IMAGES.look_for_forgot_username_link_on_email,
     },
     {
       patterns: [
-        "reset link",
-        "password reset email",
-        "set your new password",
-        "click the reset link",
+        "forgot password page",
+        "enter the username",
+        "enter your username",
       ],
+      excludeSteps: [5, 6], // Only for step 4, not 5 or 6
+      image: STEP_IMAGES.ready_for_password_reset,
+    },
+    {
+      patterns: ["check your email", "spam folder", "password reset email"],
+      contextRequired: ["password", "reset"],
+      stepNumber: 5,
       image: STEP_IMAGES.password_reset_in_progress,
     },
     {
       patterns: [
-        "contact form",
-        "email isn't in the system",
-        "email not found",
-        "try different email",
+        "reset link",
+        "click the reset link",
+        "set your new password",
+        "create your new password",
+        "click that link",
       ],
-      image: CONTEXTUAL_IMAGES.contact_form,
+      contextRequired: ["password"],
+      image: STEP_IMAGES.password_reset_in_progress,
     },
     {
-      patterns: ["successfully", "logged in", "you're all set", "success!"],
+      patterns: [
+        "successfully",
+        "logged in",
+        "you're all set",
+        "success!",
+        "now that you've found the password reset email",
+        "log in with your username and new password",
+        "you can now log in",
+        "you're now logged in",
+        "have a great day",
+        "you're all set to log in",
+      ],
       image: STEP_IMAGES.process_complete,
     },
     {
@@ -318,6 +578,33 @@ function selectBestImage(
 
   // Check each pattern group in order
   for (const patternGroup of instructionPatterns) {
+    // Check if current step is excluded
+    if (
+      patternGroup.excludeSteps &&
+      patternGroup.excludeSteps.includes(context.stepNumber)
+    ) {
+      continue;
+    }
+
+    // Check if step number matches (if specified)
+    if (
+      patternGroup.stepNumber &&
+      patternGroup.stepNumber !== context.stepNumber
+    ) {
+      continue;
+    }
+
+    // Check if required context exists
+    if (patternGroup.contextRequired) {
+      const hasRequiredContext = patternGroup.contextRequired.every(req =>
+        combinedContext.includes(req)
+      );
+      if (!hasRequiredContext) {
+        continue;
+      }
+    }
+
+    // Check patterns
     for (const pattern of patternGroup.patterns) {
       if (combinedContext.includes(pattern)) {
         return patternGroup.image;
@@ -325,24 +612,24 @@ function selectBestImage(
     }
   }
 
-  // Priority 2: Check contextual images
+  // Priority 3: Check contextual images
   for (const image of Object.values(CONTEXTUAL_IMAGES)) {
     if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
       return image;
     }
   }
 
-  // Priority 3: State-based fallback
+  // Priority 4: State-based fallback
   const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
   if (stateImage) {
     return stateImage;
   }
 
-  // Priority 4: Default to initial
+  // Priority 5: Default to initial
   return STEP_IMAGES.initial;
 }
 
-// Enhanced state detection that better tracks back-and-forth movement
+// Update analyzeUserState to better handle step 3 confusion
 function analyzeUserState(messages: any[]): ConversationContext {
   const context: ConversationContext = {
     state: "initial",
@@ -359,6 +646,11 @@ function analyzeUserState(messages: any[]): ConversationContext {
 
   const messageHistory = messages.map(m => m.content?.toLowerCase() || "");
   const lastFewMessages = messageHistory.slice(-3).join(" ");
+  const lastUserMessage =
+    messages
+      .filter(m => m.role === "user")
+      .pop()
+      ?.content?.toLowerCase() || "";
 
   // Get the most recent AI message to understand current instruction
   const lastAIMessage =
@@ -392,6 +684,10 @@ function analyzeUserState(messages: any[]): ConversationContext {
     "stuck",
     "doesn't work",
     "tried everything",
+    "where is it",
+    "can't see it",
+    "what does it look like",
+    "don't see",
   ];
 
   frustrationIndicators.forEach(indicator => {
@@ -410,111 +706,153 @@ function analyzeUserState(messages: any[]): ConversationContext {
     context.userSentiment = "positive";
   }
 
-  // Determine current step based on what AI is currently instructing
+  // FIRST: Determine current step based on conversation history and AI instructions
+  // This needs to happen BEFORE checking for confusion
+
+  // Check the entire conversation to understand progress
   if (
-    lastAIMessage.includes("i am a new user") ||
-    lastAIMessage.includes("right side") ||
-    lastAIMessage.includes("test your email") ||
-    lastAIMessage.includes("try a different email")
-  ) {
-    context.state = "checking_email_validation";
-    context.stepNumber = 1;
-  } else if (
-    lastAIMessage.includes("validation error") &&
-    lastAIMessage.includes("excellent")
-  ) {
-    context.state = "email_validated_ready_for_username";
-    context.stepNumber = 2;
-  } else if (
-    lastAIMessage.includes("forgot username") ||
-    lastAIMessage.includes("left side")
-  ) {
-    context.state = "email_validated_ready_for_username";
-    context.stepNumber = 2;
-  } else if (
-    lastAIMessage.includes("check your email") &&
-    lastAIMessage.includes("username")
-  ) {
-    context.state = "username_email_sent";
-    context.stepNumber = 3;
-  } else if (lastAIMessage.includes("forgot password")) {
-    context.state = "ready_for_password_reset";
-    context.stepNumber = 4;
-  } else if (
-    lastAIMessage.includes("reset link") ||
-    lastAIMessage.includes("password reset email")
-  ) {
-    context.state = "password_reset_in_progress";
-    context.stepNumber = 5;
-  } else if (
-    lastAIMessage.includes("success") &&
-    lastAIMessage.includes("logged")
+    allMessages.includes("successfully") &&
+    (allMessages.includes("logged in") ||
+      allMessages.includes("reset password") ||
+      allMessages.includes("i'm in") ||
+      allMessages.includes("it worked"))
   ) {
     context.state = "process_complete";
     context.stepNumber = 6;
+    context.lastSuccessfulStep = 6;
+  } else if (
+    lastAIMessage.includes("reset link") ||
+    lastAIMessage.includes("password reset email") ||
+    (lastAIMessage.includes("check your email") &&
+      lastAIMessage.includes("password")) ||
+    (allMessages.includes("password reset") &&
+      (allMessages.includes("email") ||
+        allMessages.includes("link") ||
+        allMessages.includes("got the reset")))
+  ) {
+    context.state = "password_reset_in_progress";
+    context.stepNumber = 5;
+    context.lastSuccessfulStep = 4;
+  } else if (
+    lastAIMessage.includes("forgot password") ||
+    allMessages.includes("got my username") ||
+    allMessages.includes("have username") ||
+    allMessages.includes("received username") ||
+    allMessages.includes("found my username")
+  ) {
+    context.state = "ready_for_password_reset";
+    context.stepNumber = 4;
+    context.lastSuccessfulStep = 3;
+  } else if (
+    (lastAIMessage.includes("check your email") &&
+      lastAIMessage.includes("username")) ||
+    (lastAIMessage.includes("step 3") && lastAIMessage.includes("email")) ||
+    (allMessages.includes("username email") &&
+      !allMessages.includes("got my username"))
+  ) {
+    context.state = "username_email_sent";
+    context.stepNumber = 3;
+    context.lastSuccessfulStep = 2;
+  } else if (
+    lastAIMessage.includes("forgot username") ||
+    (lastAIMessage.includes("left side") &&
+      !lastAIMessage.includes("check your email")) ||
+    (lastAIMessage.includes("validation error") &&
+      lastAIMessage.includes("excellent")) ||
+    allMessages.includes("existing student record") ||
+    allMessages.includes("validation error") ||
+    allMessages.includes("email exists")
+  ) {
+    context.state = "email_validated_ready_for_username";
+    context.stepNumber = 2;
+    context.lastSuccessfulStep = 1;
+  } else if (
+    lastAIMessage.includes("i am a new user") ||
+    lastAIMessage.includes("right side") ||
+    lastAIMessage.includes("test your email") ||
+    lastAIMessage.includes("try a different email") ||
+    allMessages.includes("invalid email") ||
+    allMessages.includes("invalid password") ||
+    allMessages.includes("login error") ||
+    allMessages.includes("can't log in")
+  ) {
+    context.state = "checking_email_validation";
+    context.stepNumber = 1;
   }
 
-  // Check for restart scenarios
+  if (
+    context.stepNumber === 5 &&
+    (lastUserMessage.includes("found it") ||
+      lastUserMessage.includes("got it") ||
+      lastUserMessage.includes("yes") ||
+      lastUserMessage.includes("found the email") ||
+      lastUserMessage.includes("what's next") ||
+      lastUserMessage.includes("what now"))
+  ) {
+    // Keep state as password_reset_in_progress
+    // The AI should guide them to click the link in the email
+    return context;
+  }
+
+  // SECOND: Now check for confusion AFTER we know what step we're on
+
+  // Check for user confusion about finding username in email (Step 3)
+  if (
+    context.stepNumber === 3 &&
+    (lastUserMessage.includes("where is it") ||
+      lastUserMessage.includes("what does it look like") ||
+      lastUserMessage.includes("can't find") ||
+      lastUserMessage.includes("don't see") ||
+      lastUserMessage.includes("show me") ||
+      lastUserMessage.includes("what am i looking for")) &&
+    !lastAIMessage.includes("password")
+  ) {
+    context.state = "looking_for_username_link";
+    return context;
+  }
+
+  // Check for user confusion about finding password reset email (Step 5)
+  if (
+    context.stepNumber === 5 &&
+    (lastUserMessage.includes("where is it") ||
+      lastUserMessage.includes("what does it look like") ||
+      lastUserMessage.includes("can't find") ||
+      lastUserMessage.includes("don't see") ||
+      lastUserMessage.includes("show me") ||
+      lastUserMessage.includes("what am i looking for"))
+  ) {
+    // Keep the state as password_reset_in_progress but ensure right image shows
+    return context;
+  }
+
+  // Check for specific user responses about finding/not finding email elements
+  if (
+    (lastFewMessages.includes("got the email") ||
+      lastFewMessages.includes("found the email") ||
+      lastFewMessages.includes("see the email")) &&
+    context.stepNumber === 3
+  ) {
+    if (!lastFewMessages.includes("username")) {
+      // They found the email but maybe not the username yet
+      context.state = "looking_for_username_link";
+    }
+  }
+
+  // Check for restart scenarios - including contact form appearance
   if (
     lastFewMessages.includes("start over") ||
     lastFewMessages.includes("try different email") ||
     lastFewMessages.includes("wrong email") ||
     lastFewMessages.includes("contact form") ||
+    lastFewMessages.includes("contact info") ||
+    lastFewMessages.includes("contact information") ||
+    lastFewMessages.includes("asks for my") ||
+    lastFewMessages.includes("asks for address") ||
     (lastAIMessage.includes("different email") &&
       lastAIMessage.includes("i am a new user"))
   ) {
     context.state = "restart_needed";
-    // Keep the step number at 1 since we're going back to email validation
     context.stepNumber = 1;
-  }
-
-  // Original user response patterns for state detection
-  if (!context.state || context.state === "initial") {
-    if (
-      allMessages.includes("successfully") &&
-      (allMessages.includes("logged in") ||
-        allMessages.includes("reset password") ||
-        allMessages.includes("i'm in") ||
-        allMessages.includes("it worked"))
-    ) {
-      context.state = "process_complete";
-      context.stepNumber = 6;
-      context.lastSuccessfulStep = 6;
-    } else if (
-      allMessages.includes("password reset") &&
-      (allMessages.includes("email") ||
-        allMessages.includes("link") ||
-        allMessages.includes("got the reset"))
-    ) {
-      context.state = "password_reset_in_progress";
-      context.stepNumber = 5;
-      context.lastSuccessfulStep = 4;
-    } else if (
-      allMessages.includes("got my username") ||
-      allMessages.includes("have username") ||
-      allMessages.includes("received username") ||
-      allMessages.includes("found my username")
-    ) {
-      context.state = "ready_for_password_reset";
-      context.stepNumber = 4;
-      context.lastSuccessfulStep = 3;
-    } else if (
-      allMessages.includes("existing student record") ||
-      allMessages.includes("validation error") ||
-      allMessages.includes("email exists")
-    ) {
-      context.state = "email_validated_ready_for_username";
-      context.stepNumber = 2;
-      context.lastSuccessfulStep = 1;
-    } else if (
-      allMessages.includes("invalid email") ||
-      allMessages.includes("invalid password") ||
-      allMessages.includes("login error") ||
-      allMessages.includes("can't log in")
-    ) {
-      context.state = "has_login_error";
-      context.stepNumber = 1;
-    }
   }
 
   return context;
@@ -587,7 +925,10 @@ RULES FOR GENERATING OPTIONS:
 5. Always include a "try different email" option when stuck on email-related steps
 6. If user sentiment is frustrated, include a "I need help" option
 7. Always include a "Where is it?" option if the AI is telling them to look for the Forgot Username link or Forgot Password link
-8. Always have a positive outcome option like "Found it!" or "Trying now" if the AI is asking about checking email or finding something
+8. Always have a positive outcome option like "Found it. What's next?" or "Trying now, hold on." if the AI is asking about checking email or finding something
+9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
+10. When steps are skipped, generate one option for the previous step like "Hold on, I got [lastQuestion || keyAction] previously"
+11. Have a "We can stop here" option if the user's initial question has been answered 
 
 RESPONSE PATTERNS BY QUESTION TYPE:
 - "What happens when...?" → What the user sees/experiences
@@ -818,133 +1159,6 @@ function getIntelligentFallbackOptions(
   return { showInput: true };
 }
 
-// Enhanced response generation for each state
-function getResponseForState(
-  state: string,
-  context?: ConversationContext
-): {
-  message: string;
-  image?: MessageImage;
-} {
-  const image = STEP_IMAGES[state as keyof typeof STEP_IMAGES];
-
-  // Add sentiment-aware modifications
-  const sentimentPrefix =
-    context?.userSentiment === "frustrated"
-      ? "I understand this is frustrating, but don't worry - "
-      : "";
-
-  switch (state) {
-    case "initial":
-      return {
-        message: `Hey there! I'm here to help you get back into your UHCC continuing education account.
-
-What's happening when you try to log in? Are you getting some kind of error message?
-
-**Quick tip:** If you're getting a login error, we'll start by checking if your email's in the system using the "I am a new user" section on the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.`,
-        image,
-      };
-
-    case "has_login_error":
-      return {
-        message: `${sentimentPrefix}I see you're getting a login error - that's frustrating! Don't worry, we can fix this with a simple 6-step process.
-
-First, let's check if your email is in the system. Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and look for the RIGHT SIDE where it says "I am a new user" - click there and enter your email.
-
-What happens when you do that?`,
-        image,
-      };
-
-    case "checking_email_validation":
-      return {
-        message: `Perfect! You're testing your email in the "I am a new user" section.
-
-Remember, we want to see a validation error here - that means your email IS in the system. If it just asks for contact info, your email isn't registered.
-
-What message appears after you enter your email?`,
-        image,
-      };
-
-    case "email_validated_ready_for_username":
-      return {
-        message: `🎉 **EXCELLENT!** That validation error is exactly what we wanted! Your email IS in the system.
-
-Now for Step 2: Go back to the LEFT side ("I am an existing user") and click "Forgot Username". Enter that same email address. The system will send your username to your email.
-
-Have you tried that yet?`,
-        image,
-      };
-
-    case "username_email_sent":
-      return {
-        message: `Great! Step 3 now: Check your email inbox and spam folder for the username email from UHCC.
-
-Once you find your username in that email, we'll move to Step 4 (password reset).
-
-Did you find the email with your username?`,
-        image,
-      };
-
-    case "ready_for_password_reset":
-      return {
-        message: `Perfect! Now for Step 4: Go to the "Forgot Password" page and enter the username you just got from your email.
-
-This will send a password reset link to your email for Step 5.
-
-How did that go?`,
-        image,
-      };
-
-    case "password_reset_in_progress":
-      return {
-        message: `Almost there! Step 5: Check your email (and spam folder) for the password reset email from UHCC.
-
-Click the reset link in that email and set your new password. After that, you can log in on the LEFT side ("I am an existing user") of the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> with your username and new password.
-
-Were you able to reset your password?`,
-        image,
-      };
-
-    case "restart_needed":
-      const emailList = context?.attemptedEmails?.length
-        ? `\n\nYou've tried: ${context.attemptedEmails.join(", ")}`
-        : "";
-
-      return {
-        message: `${sentimentPrefix}No problem! Let's start fresh with a different email address.
-
-Sometimes the email you think you used isn't the one in the system. Let's go back to Step 1 and try a different email.${emailList}
-
-Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and use the "I am a new user" section on the RIGHT SIDE to test a different email address.
-
-What other email addresses might you have used when you first registered?`,
-        image: CONTEXTUAL_IMAGES.contact_form, // Show contact form image when restarting
-      };
-
-    case "process_complete":
-      return {
-        message: `🎉 **SUCCESS!** You're all set! You can now log in anytime using:
-• Username: (from the first email)
-• Password: (your new password)
-
-Just use the LEFT side ("I am an existing user") of the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a>.
-
-Is there anything else I can help you with?`,
-        image,
-      };
-
-    default:
-      return {
-        message: `Hey! I'm here to help with UHCC portal login issues. What's happening when you try to log in?
-
-If this is about something other than portal login problems, please contact:
-
-${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`,
-        image,
-      };
-  }
-}
-
 export async function POST(req: Request) {
   try {
     const { message, messages, chatId } = await req.json();
@@ -996,19 +1210,28 @@ export async function POST(req: Request) {
           pageContext = "I see you're on the password reset page. ";
         } else if (content.includes("login") || content.includes("logon")) {
           pageContext = "I can see the login page. ";
-        } else if (content.includes("contact information")) {
+        } else if (
+          content.includes("contact information") ||
+          (content.includes("first name") &&
+            content.includes("last name") &&
+            content.includes("address"))
+        ) {
           pageContext =
             "I see the contact information form - this means your email isn't in the system yet. ";
+          // Force state to restart_needed when contact form is detected
+          conversationContext.state = "restart_needed";
         }
       } else {
         pageContext = "I couldn't access that page, but I can still help! ";
       }
     }
 
-    // Create intelligent system context with full conversation history and knowledge base
+    // Enhanced system prompt section for contact form recognition
     const systemPrompt = `You are an expert UHCC portal support specialist. You're helping students recover their login credentials with warmth, patience, and expertise.
 
 CORE BEHAVIOR PRINCIPLES:
+- Move at a slow, steady pace. Do not skip steps and make sure to be thorough in Steps 3 and 5. Do not miss the inbox/spam checking, and even displaying what the email looks like.
+- Always ask for confirmation before moving to the next step
 - Be conversational and encouraging - talk like you're helping a friend
 - Keep responses focused and brief (2-3 sentences max) 
 - Guide users step-by-step through the process without overwhelming them
@@ -1016,6 +1239,26 @@ CORE BEHAVIOR PRINCIPLES:
 - Recognize frustration and offer alternative approaches
 - Remember the ENTIRE conversation context to provide personalized help
 - Use natural language with contractions and casual tone
+- Never say "I'm a text-based assistant, I don't have the ability to show you images".
+
+CRITICAL CONTACT FORM RECOGNITION:
+- If user mentions "contact form", "contact info", "contact information", "asks for my name/address", or similar:
+  - This means their email is NOT in the system
+  - IMMEDIATELY acknowledge this and suggest trying a different email
+  - Show empathy: "I see the contact form appeared - that means this email isn't in the system yet."
+  - Guide them back to Step 1 with a different email
+
+STEP 3 USERNAME EMAIL HANDLING:
+- When user is checking email for username (Step 3), watch for confusion indicators:
+  - "Where is it?", "What does it look like?", "Can't find it", "Don't see it", "Show me"
+  - RESPOND: "In the email from UHCC, look for a link that says 'Forgot Username' - click that link to see your username. The username itself might be in the email or revealed after clicking the link."
+  - This helps them understand they need to look INSIDE the email for a link
+
+STEP 5 PASSWORD RESET EMAIL HANDLING:
+- When user is checking email for password reset (Step 5), watch for confusion indicators:
+  - "Where is it?", "What does it look like?", "Can't find it", "Don't see it", "Show me"
+  - RESPOND: "Look for the password reset email from UHCC - it will have a link to reset your password. Click that link to create your new password."
+  - Make sure to differentiate this from the username email in Step 3
 
 CURRENT USER CONTEXT:
 - State: ${conversationContext.state}
@@ -1029,10 +1272,27 @@ ${pageContext ? `- Page Context: ${pageContext}` : ""}
 THE 6-STEP UHCC PORTAL RESET PROCESS:
 1. Email Validation: "I am a new user" section (RIGHT side) → validation error = GOOD (email exists)
 2. Username Reset: "I am an existing user" section (LEFT side) → Forgot Username → email sent
-3. Get Username: Check email/spam → find username from UHCC
+3. Get Username: Check email/spam → find username from UHCC (may need to click link in email)
 4. Password Reset: Forgot Password page → enter username → reset email sent
 5. Reset Password: Check email/spam → click reset link → create new password
 6. Login Success: LEFT side with username + new password
+
+CRITICAL UNDERSTANDING:
+- Validation error in Step 1 = SUCCESS (email is in system)
+- Contact form in Step 1 = FAILURE (email not in system, try different email)
+- Users often use wrong email - always offer to try different emails
+- Emails often go to spam - always remind to check spam folder
+- Some users get stuck in loops - recognize patterns and suggest restart
+- At Step 3, users may need to click a link INSIDE the email to see their username
+
+SPECIFIC RESPONSES FOR COMMON SCENARIOS:
+- User says "contact form appeared" → "I see the contact form - that means this email isn't in the system. Let's try a different email address you might have used when registering."
+- User says "asks for my information" → "That contact form means your email isn't registered yet. What other email addresses might you have used?"
+- User says "contact info page" → "The contact information form appearing tells us this email isn't in their system. Let's go back and test a different email."
+- User at Step 3 says "where is it?" → "Look inside the email from UHCC for a link that says 'Forgot Username' - click that link to see your username."
+- User at Step 3 says "can't find username" → "The username might be in the email itself, or you might need to click the 'Forgot Username' link in the email to see it."
+- User at Step 5 says "where is it?" → "Check your email for the password reset email from UHCC - it will have a link to reset your password. Click that link to set your new password."
+- User at Step 5 says "can't find reset email" → "The password reset email should be from UHCC. Check your spam folder too. The email will contain a link to reset your password."
 
 CRITICAL UNDERSTANDING:
 - Validation error in Step 1 = SUCCESS (email is in system)

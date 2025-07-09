@@ -591,20 +591,35 @@ export default function UHCCPortalSupport() {
                     <button
                       key={index}
                       onClick={() => handleQuickAction(action)}
-                      className={`${action.color} border-2 rounded-lg p-6 text-left hover:shadow-lg transition-all duration-200 group bg-white`}
+                      className={`relative group border-2 rounded-xl p-6 text-left transition-all duration-200 bg-white hover:shadow-xl focus:ring-2 focus:ring-amber-400 ${action.color}`}
+                      style={{
+                        boxShadow:
+                          index === 0
+                            ? "0 0 0 2px #fbbf24, 0 4px 24px 0 rgba(202,92,19,0.08)"
+                            : undefined,
+                        zIndex: index === 0 ? 1 : undefined,
+                      }}
                     >
+                      {/* Recommended badge */}
+                      {index === 0 && (
+                        <span className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-600 text-white text-xs font-semibold shadow border border-amber-700 animate-pulse">
+                          Recommended
+                        </span>
+                      )}
                       <div className="flex items-start gap-4">
                         <div className="text-gray-600 group-hover:text-amber-600 transition-colors flex-shrink-0 mt-1">
                           {action.icon}
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors mb-2">
+                          <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors text-lg mb-1">
                             {action.title}
                           </h4>
-                          <p className="text-gray-600 text-sm">
-                            {action.description}
-                          </p>
+                          <p className="text-gray-600 text-sm">{action.description}</p>
                         </div>
+                      </div>
+                      {/* Arrow for hover */}
+                      <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ArrowRightIcon size={20} className="text-amber-600" />
                       </div>
                     </button>
                   ))}
