@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import React from "react";
 import {
   PlusIcon,
   HeadphonesIcon,
@@ -11,6 +12,10 @@ import {
   CheckCircleIcon,
   ArrowRightIcon,
   MessageCircleIcon,
+  MenuIcon,
+  XIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "lucide-react";
 
 type MessageImage = {
@@ -22,13 +27,12 @@ type MessageImage = {
   height?: number;
 };
 
-// 3. Update Message type to use single image:
 type Message = {
   role: "user" | "assistant";
   content: string;
   options?: Option[];
   showInput?: boolean;
-  image?: MessageImage; // Changed from images to image
+  image?: MessageImage;
 };
 
 type Option = {
@@ -67,6 +71,7 @@ export default function UHCCPortalSupport() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messagesSent, setMessagesSent] = useState(0);
   const [latestOptionsMessageIndex, setLatestOptionsMessageIndex] = useState<
@@ -122,6 +127,24 @@ export default function UHCCPortalSupport() {
   useEffect(() => {
     scrollToBottom();
   }, [currentChat.messages, isLoading]);
+
+  // Handle sidebar state on resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        // Desktop: sidebar can be toggled
+      } else {
+        // Mobile: close sidebar by default
+        setSidebarOpen(false);
+      }
+    };
+
+    // Set initial state
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Initial troubleshooting options for homepage
   const quickActions: QuickAction[] = [
@@ -203,12 +226,14 @@ export default function UHCCPortalSupport() {
     setChats(prev => [newChat, ...prev]);
     setCurrentChat(newChat);
     setShowChat(false);
-    setMessagesSent(0); // Reset message counter
-    setLatestOptionsMessageIndex(null); // Reset options tracking
+    setSidebarOpen(window.innerWidth >= 768); // Open on desktop, closed on mobile
+    setMessagesSent(0);
+    setLatestOptionsMessageIndex(null);
   };
 
   const handleQuickAction = (action: QuickAction) => {
     setShowChat(true);
+    setSidebarOpen(window.innerWidth >= 768); // Open on desktop, closed on mobile
     setTimeout(() => handleSend(action.action), 100);
   };
 
@@ -221,10 +246,8 @@ export default function UHCCPortalSupport() {
     if (!messageToSend.trim()) return;
     setError(null);
 
-    // Increment message counter
     setMessagesSent(prev => prev + 1);
 
-    // Add user message to UI immediately
     const userMessage = { role: "user" as const, content: messageToSend };
     const updatedMessages = [...currentChat.messages, userMessage];
 
@@ -257,7 +280,6 @@ export default function UHCCPortalSupport() {
         }),
       });
 
-      // Handle rate limiting
       if (response.status === 429) {
         const rateLimitData = await response.json();
         const waitTime = rateLimitData.timeRemaining || 60;
@@ -266,7 +288,6 @@ export default function UHCCPortalSupport() {
           `Please slow down! You can send another message in ${waitTime} seconds.`
         );
 
-        // Refresh rate limit after wait time
         setTimeout(() => {
           setError(null);
           fetchRateLimitStatus();
@@ -281,13 +302,12 @@ export default function UHCCPortalSupport() {
 
       const data = await response.json();
 
-      // Add assistant's response with images
       const assistantMessage = {
         role: "assistant" as const,
         content: data.message,
         options: data.options,
         showInput: data.showInput,
-        image: data.image, // Include image from API response
+        image: data.image,
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];
@@ -301,10 +321,8 @@ export default function UHCCPortalSupport() {
         prev.map(chat => (chat.id === currentChat.id ? finalChat : chat))
       );
 
-      // After successful message, refresh rate limit info
       fetchRateLimitStatus();
 
-      // Update latest options message index if the response has options
       if (data.options && data.options.length > 0) {
         setLatestOptionsMessageIndex(finalMessages.length - 1);
       }
@@ -324,13 +342,14 @@ export default function UHCCPortalSupport() {
     limit?: number;
     reset?: number;
   }) => {
-    // Don't show anything until we have data from first API call
     if (typeof remaining !== "number" || typeof limit !== "number") {
       return (
         <div className="flex items-center gap-2 text-sm text-white/90">
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-            <span className="text-xs">{messagesSent} messages sent</span>
+            <span className="text-xs">
+              {messagesSent} messages sent
+            </span>
           </div>
         </div>
       );
@@ -342,7 +361,9 @@ export default function UHCCPortalSupport() {
       <div className="flex items-center gap-2 text-sm text-white/90">
         <div className="flex items-center gap-1">
           <div className={`w-2 h-2 rounded-full ${color}`}></div>
-          <span className="text-xs">{messagesSent} messages sent</span>
+          <span className="text-xs">
+            {messagesSent} messages sent
+          </span>
         </div>
       </div>
     );
@@ -353,14 +374,24 @@ export default function UHCCPortalSupport() {
     setMessage("");
     setError(null);
     setShowChat(true);
+    setSidebarOpen(false); // Close sidebar when selecting chat on mobile
+  };
+
+  // Function to toggle sidebar and handle desktop layout
+  const toggleSidebar = () => {
+    if (window.innerWidth >= 768) {
+      // Desktop: toggle sidebar
+      setSidebarOpen(!sidebarOpen);
+    } else {
+      // Mobile: just toggle overlay
+      setSidebarOpen(!sidebarOpen);
+    }
   };
 
   const formatMessage = (content: string, image?: MessageImage) => {
     const messageElements = [];
 
-    // Add text content first
     const textContent = content.split("\n").map((line, i) => {
-      // Handle headers with **Header**
       if (
         line.trim().startsWith("**") &&
         line.trim().endsWith("**") &&
@@ -369,39 +400,40 @@ export default function UHCCPortalSupport() {
         const headerText = line.trim().replace(/^\*\*|\*\*$/g, "");
         return (
           <div
-            key={i}
-            className="text-amber-700 font-bold text-lg mb-3 mt-4 first:mt-0"
+            key={`header-${i}`}
+            className="text-amber-700 font-bold text-base md:text-lg mb-3 mt-4 first:mt-0"
           >
             {headerText}
           </div>
         );
       }
 
-      // Handle bullet points with •
       if (line.trim().startsWith("•")) {
         return (
-          <div key={i} className="flex items-start gap-2 mb-2 ml-4">
+          <div key={`bullet-${i}`} className="flex items-start gap-2 mb-2 ml-4">
             <span className="text-amber-600 mt-1">•</span>
-            <span className="flex-1">{line.trim().substring(1).trim()}</span>
+            <span className="flex-1 text-sm md:text-base">
+              {line.trim().substring(1).trim()}
+            </span>
           </div>
         );
       }
 
-      // Handle numbered steps
       const numberMatch = line.match(/^(\d+)\.\s*(.*)/);
       if (numberMatch) {
         const [, number, content] = numberMatch;
         return (
-          <div key={i} className="flex items-start gap-3 mb-2 ml-4">
-            <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
+          <div key={`number-${i}`} className="flex items-start gap-3 mb-2 ml-4">
+            <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5 flex-shrink-0">
               {number}
             </span>
-            <span className="flex-1 pt-0.5">{content}</span>
+            <span className="flex-1 pt-0.5 text-sm md:text-base">
+              {content}
+            </span>
           </div>
         );
       }
 
-      // Regular text with **bold** formatting and link styling
       const formattedLine = line.replace(
         /\*\*(.*?)\*\*/g,
         "<strong>$1</strong>"
@@ -409,22 +441,21 @@ export default function UHCCPortalSupport() {
 
       return line.trim() ? (
         <div
-          key={i}
-          className="mb-2 [&_a]:text-amber-700 [&_a]:hover:text-amber-800 [&_a]:underline [&_a]:cursor-pointer"
+          key={`text-${i}`}
+          className="mb-2 text-sm md:text-base [&_a]:text-amber-700 [&_a]:hover:text-amber-800 [&_a]:underline [&_a]:cursor-pointer"
           dangerouslySetInnerHTML={{ __html: formattedLine }}
         />
       ) : (
-        <div key={i} className="h-2" />
+        <div key={`space-${i}`} className="h-2" />
       );
     });
 
     messageElements.push(<div key="content">{textContent}</div>);
 
-    // Add single image at the bottom if it exists
     if (image) {
       messageElements.push(
         <div key="image" className="mt-4">
-          <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm max-w-md">
+          <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm max-w-full md:max-w-md">
             <img
               src={image.src}
               alt={image.alt}
@@ -432,11 +463,10 @@ export default function UHCCPortalSupport() {
               style={{
                 width: image.width || "auto",
                 height: image.height || "auto",
-                maxHeight: "250px", // Reduced from 400px to 250px
+                maxHeight: "200px",
                 objectFit: "contain",
               }}
               onError={e => {
-                // Hide image container if it fails to load
                 const container = e.currentTarget.closest(".border");
                 if (container) {
                   (container as HTMLElement).style.display = "none";
@@ -458,7 +488,6 @@ export default function UHCCPortalSupport() {
     return messageElements;
   };
 
-  // Check if conversation is complete (contains contact info)
   const isConversationComplete = currentChat.messages.some(
     msg =>
       msg.role === "assistant" &&
@@ -467,48 +496,125 @@ export default function UHCCPortalSupport() {
         msg.content.includes("SUCCESS!"))
   );
 
+  // Campus names for footer
+  const campusNames = [
+    "Hawaii CC",
+    "Honolulu CC",
+    "Kapiolani CC",
+    "Kauai CC",
+    "Leeward CC",
+    "Maui College",
+    "Windward CC",
+    "PCATT",
+  ];
+
+  // Process steps for how it works section
+  const processSteps = [
+    {
+      step: "1",
+      title: "Email Validation",
+      desc: 'Use "I am a new user" section to check if your email is in the system',
+    },
+    {
+      step: "2",
+      title: "Request Username",
+      desc: 'Use "Forgot Username" page to get your username sent to email',
+    },
+    {
+      step: "3",
+      title: "Get Your Username",
+      desc: "Check your email and spam folder for username from UHCC",
+    },
+    {
+      step: "4",
+      title: "Request Password Reset",
+      desc: 'Use "Forgot Password" page with your username to get reset link',
+    },
+    {
+      step: "5",
+      title: "Set New Password",
+      desc: "Follow the reset link in your email to create a new password",
+    },
+    {
+      step: "✓",
+      title: "Login Successfully",
+      desc: 'Use "I am an existing user" section with your username and new password',
+      isSuccess: true,
+    },
+  ];
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
-      {/* Sidebar - only show if chat is active */}
-      {showChat && (
-        <div className="w-80 bg-white border-r border-amber-200 flex flex-col shadow-lg">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      {showChat && sidebarOpen && (
+        <div
+          className="
+            fixed md:relative
+            w-80 h-full
+            bg-white border-r border-amber-200 
+            flex flex-col shadow-lg
+            z-50 md:z-auto
+            transition-all duration-300 ease-in-out
+          "
+        >
+          {/* Sidebar Header */}
           <div className="p-4 border-b border-amber-200">
-            <div className="flex items-center gap-3 mb-4">
-              <img
-                src="/images/uhcc-logo-3.png"
-                alt="UHCC Logo"
-                width={40}
-                className="object-contain"
-              />
-              <div>
-                <h1 className="font-bold text-gray-800">UHCC Portal Help</h1>
-                <p className="text-sm text-gray-600">Guided Support</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/images/uhcc-logo-3.png"
+                  alt="UHCC Logo"
+                  width={40}
+                  className="object-contain"
+                />
+                <div>
+                  <h1 className="font-bold text-gray-800 text-sm md:text-base">
+                    UHCC Portal Help
+                  </h1>
+                  <p className="text-xs md:text-sm text-gray-600">
+                    Guided Support
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <XIcon size={20} />
+              </button>
             </div>
 
             <button
               onClick={handleNewChat}
-              className="w-full flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors"
+              className="w-full flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors text-sm md:text-base"
             >
               <PlusIcon size={16} />
               New Help Session
             </button>
           </div>
 
-          {/* Contact Info - only show if conversation is complete */}
+          {/* Contact Info */}
           {isConversationComplete && (
             <div className="p-4 bg-amber-50 border-b border-amber-200">
-              <h3 className="font-semibold text-gray-800 mb-2">
+              <h3 className="font-semibold text-gray-800 mb-2 text-sm md:text-base">
                 Need More Help?
               </h3>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-xs md:text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>📞</span>
                   <span>808-842-2563</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>📧</span>
-                  <span>uhcccewd@hawaii.edu</span>
+                  <span className="break-all">uhcccewd@hawaii.edu</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <span>🕒</span>
@@ -521,7 +627,7 @@ export default function UHCCPortalSupport() {
           {/* Chat History */}
           <div className="flex-1 overflow-y-auto">
             <div className="p-2">
-              <h3 className="text-sm font-semibold text-gray-600 mb-2 px-2">
+              <h3 className="text-xs md:text-sm font-semibold text-gray-600 mb-2 px-2">
                 Recent Sessions
               </h3>
               {chats.map(chat => (
@@ -534,7 +640,7 @@ export default function UHCCPortalSupport() {
                       : "hover:bg-gray-50"
                   }`}
                 >
-                  <h4 className="text-sm font-medium text-gray-800 truncate">
+                  <h4 className="text-xs md:text-sm font-medium text-gray-800 truncate">
                     {chat.title}
                   </h4>
                   <p className="text-xs text-gray-500 mt-1">
@@ -548,50 +654,55 @@ export default function UHCCPortalSupport() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+          showChat && sidebarOpen && window.innerWidth >= 768 ? "ml-0" : ""
+        }`}
+      >
         {!showChat ? (
-          /* Initial Issue Selection Screen with scrollable header and footer */
+          /* Initial Issue Selection Screen */
           <div className="flex-1 overflow-y-auto bg-gradient-to-br from-amber-50 to-orange-50">
-            {/* Header with orange background matching UHCC */}
+            {/* Header */}
             <header
-              className="p-4 shadow-lg text-white border-b border-black relative"
+              className="p-3 md:p-4 shadow-lg text-white border-b border-black relative"
               style={{
                 background: "#CA5C13",
                 backgroundImage: "url('/images/UHCC-Hawaiian-logo.png')",
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "10px center",
-                backgroundSize: "auto 70%",
+                backgroundSize: "auto 50%",
               }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1" />
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  Help Available
+                  <span className="hidden sm:inline">Online</span>
+                  <span className="sm:hidden">Online</span>
                 </div>
               </div>
             </header>
 
             {/* Content */}
-            <div className="p-6 bg-gradient-to-b from-amber-50/50 to-white">
+            <div className="p-4 md:p-6 bg-gradient-to-b from-amber-50/50 to-white">
               <div className="max-w-4xl mx-auto">
-                <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold text-gray-800 mb-4">
+                <div className="text-center mb-6 md:mb-8">
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3 md:mb-4">
                     Can&apos;t log into your UHCC account?
                   </h2>
-                  <p className="text-gray-600 text-lg">
+                  <p className="text-gray-600 text-base md:text-lg px-2">
                     Choose what&apos;s happening and I&apos;ll guide you through
                     fixing it step by step.
                   </p>
                 </div>
 
                 {/* Quick Actions Grid */}
-                <div className="grid md:grid-cols-2 gap-4 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
                   {quickActions.map((action, index) => (
                     <button
-                      key={index}
+                      key={`action-${index}`}
                       onClick={() => handleQuickAction(action)}
-                      className={`relative group border-2 rounded-xl p-6 text-left transition-all duration-200 bg-white hover:shadow-xl focus:ring-2 focus:ring-amber-400 ${action.color}`}
+                      className={`relative group border-2 rounded-xl p-4 md:p-6 text-left transition-all duration-200 bg-white hover:shadow-xl focus:ring-2 focus:ring-amber-400 ${action.color}`}
                       style={{
                         boxShadow:
                           index === 0
@@ -600,143 +711,76 @@ export default function UHCCPortalSupport() {
                         zIndex: index === 0 ? 1 : undefined,
                       }}
                     >
-                      {/* Recommended badge */}
                       {index === 0 && (
-                        <span className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-600 text-white text-xs font-semibold shadow border border-amber-700 animate-pulse">
+                        <span className="absolute -top-2 md:-top-3 right-2 md:right-4 px-2 py-0.5 rounded-full bg-amber-600 text-white text-xs font-semibold shadow border border-amber-700 animate-pulse">
                           Recommended
                         </span>
                       )}
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3 md:gap-4">
                         <div className="text-gray-600 group-hover:text-amber-600 transition-colors flex-shrink-0 mt-1">
                           {action.icon}
                         </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors text-lg mb-1">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors text-base md:text-lg mb-1">
                             {action.title}
                           </h4>
-                          <p className="text-gray-600 text-sm">{action.description}</p>
+                          <p className="text-gray-600 text-sm">
+                            {action.description}
+                          </p>
                         </div>
                       </div>
-                      {/* Arrow for hover */}
-                      <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                         <ArrowRightIcon size={20} className="text-amber-600" />
                       </div>
                     </button>
                   ))}
                 </div>
 
-                {/* How It Works */}
-                <div className="bg-white rounded-lg border border-amber-200 p-6 mb-8 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                    How the UHCC Portal Reset Process Works:
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
-                        1
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-800">
-                          Email Validation
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Use &quot;I am a new user&quot; section to check if
-                          your email is in the system
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
-                        2
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-800">
-                          Request Username
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Use &quot;Forgot Username&quot; page to get your
-                          username sent to email
+                {/* How It Works - Collapsed on mobile by default */}
+                <details className="bg-white rounded-lg border border-amber-200 p-4 md:p-6 mb-6 md:mb-8 shadow-sm">
+                  <summary className="cursor-pointer font-semibold text-gray-800 text-base md:text-lg mb-2 md:mb-4">
+                    How the UHCC Portal Reset Process Works
+                  </summary>
+                  <div className="space-y-3 mt-4">
+                    {processSteps.map((item, i) => (
+                      <div key={`step-${i}`} className="flex items-start gap-3">
+                        <span
+                          className={`${item.isSuccess ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"} rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5 flex-shrink-0`}
+                        >
+                          {item.step}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-800 text-sm md:text-base">
+                            {item.title}
+                          </div>
+                          <div className="text-xs md:text-sm text-gray-600">
+                            {item.desc}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
-                        3
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-800">
-                          Get Your Username
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Check your email and spam folder for username from
-                          UHCC
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
-                        4
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-800">
-                          Request Password Reset
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Use &quot;Forgot Password&quot; page with your
-                          username to get reset link
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
-                        5
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-800">
-                          Set New Password
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Follow the reset link in your email to create a new
-                          password
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="bg-green-100 text-green-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold mt-0.5">
-                        ✓
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-800">
-                          Login Successfully
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Use &quot;I am an existing user&quot; section with
-                          your username and new password
-                        </div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
 
-                  <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
-                    <div className="text-sm text-amber-800">
+                  <div className="mt-6 p-3 md:p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <div className="text-xs md:text-sm text-amber-800">
                       <strong>💡 How I help:</strong> I&apos;ll guide you
                       through each step and give you specific options based on
                       what you might see on your screen. Just select what
                       matches your situation to get the next step!
                     </div>
                   </div>
-                </div>
+                </details>
 
                 {/* Portal Access */}
-                <div className="bg-white rounded-lg border border-amber-200 p-6 shadow-sm mb-8">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                <div className="bg-white rounded-lg border border-amber-200 p-4 md:p-6 shadow-sm mb-6 md:mb-8">
+                  <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4">
                     Need to access the portal directly?
                   </h3>
                   <a
                     href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors w-fit"
+                    className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors w-fit text-sm md:text-base"
                   >
                     <ExternalLinkIcon size={16} />
                     Open Portal Login
@@ -745,45 +789,33 @@ export default function UHCCPortalSupport() {
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Footer - Simplified on mobile */}
             <footer
-              className="py-8 text-white"
+              className="py-6 md:py-8 text-white"
               style={{ background: "#A0874B" }}
             >
-              <div className="max-w-6xl mx-auto px-6">
-                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
-                  {/* Logo Section */}
+              <div className="max-w-6xl mx-auto px-4 md:px-6">
+                <div className="flex flex-col lg:flex-row items-center lg:items-start justify-between gap-6 md:gap-8">
                   <div className="flex-shrink-0">
                     <img
                       src="/images/uhcc-logo-2.png"
                       alt="University of Hawaii Community Colleges"
-                      className="h-60 w-auto object-contain"
+                      className="h-32 md:h-60 w-auto object-contain"
                     />
                   </div>
 
-                  {/* Campus Links */}
-                  <div className="flex-1 lg:mx-8">
-                    <div className="text-sm flex flex-wrap items-center gap-x-2 gap-y-2 justify-center lg:justify-start text-white/90">
-                      <span>Hawaii CC</span>
-                      <span>&bull;</span>
-                      <span>Honolulu CC</span>
-                      <span>&bull;</span>
-                      <span>Kapiolani CC</span>
-                      <span>&bull;</span>
-                      <span>Kauai CC</span>
-                      <span>&bull;</span>
-                      <span>Leeward CC</span>
-                      <span>&bull;</span>
-                      <span>Maui College</span>
-                      <span>&bull;</span>
-                      <span>Windward CC</span>
-                      <span>&bull;</span>
-                      <span>PCATT</span>
+                  <div className="flex-1 lg:mx-8 text-center lg:text-left">
+                    <div className="text-xs md:text-sm flex flex-wrap items-center gap-x-2 gap-y-2 justify-center lg:justify-start text-white/90">
+                      {campusNames.map((campus, i) => (
+                        <React.Fragment key={`campus-${i}`}>
+                          <span>{campus}</span>
+                          {i < campusNames.length - 1 && <span>&bull;</span>}
+                        </React.Fragment>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Equal Opportunity Statement */}
-                  <div className="text-sm max-w-xs text-right">
+                  <div className="text-xs md:text-sm max-w-xs text-center lg:text-right">
                     <p>
                       The University of Hawaii is an Equal
                       Opportunity/Affirmative Action Institution. Use of this
@@ -799,21 +831,35 @@ export default function UHCCPortalSupport() {
             </footer>
           </div>
         ) : (
-          /* Guided Chat Interface */
+          /* Chat Interface */
           <>
-            {/* Header with orange background matching UHCC */}
+            {/* Chat Header */}
             <header
-              className="p-4 shadow-lg text-white border-b border-black relative"
+              className="p-3 md:p-4 shadow-lg text-white border-b border-black relative"
               style={{
                 background: "#CA5C13",
                 backgroundImage: "url('/images/UHCC-Hawaiian-logo.png')",
                 backgroundRepeat: "no-repeat",
-                backgroundPosition: "10px center",
-                backgroundSize: "auto 70%",
+                backgroundPosition: "55px center",
+                backgroundSize: "auto 50%",
               }}
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1" />
+                <div className="flex items-center gap-2 md:gap-4">
+                  {/* Mobile menu button / Desktop sidebar toggle */}
+                  <button
+                    onClick={toggleSidebar}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <MenuIcon size={20} className="md:hidden" />
+                    {sidebarOpen ? (
+                      <ChevronLeftIcon size={20} className="hidden md:block" />
+                    ) : (
+                      <ChevronRightIcon size={20} className="hidden md:block" />
+                    )}
+                  </button>
+                </div>
+
                 <div className="flex items-center gap-4">
                   <RateLimitIndicator
                     remaining={rateLimitInfo.remaining}
@@ -823,20 +869,21 @@ export default function UHCCPortalSupport() {
                 </div>
               </div>
             </header>
+
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-amber-50/30 to-white">
+            <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 bg-gradient-to-b from-amber-50/30 to-white">
               {currentChat.messages.map((msg, index) => (
-                <div key={index}>
+                <div key={`message-${index}`}>
                   <div
-                    className={`flex gap-3 ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}
+                    className={`flex gap-2 md:gap-3 ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}
                   >
                     {msg.role === "assistant" && (
-                      <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <HeadphonesIcon className="w-4 h-4 text-white" />
+                      <div className="w-7 h-7 md:w-8 md:h-8 bg-amber-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <HeadphonesIcon className="w-3 h-3 md:w-4 md:h-4 text-white" />
                       </div>
                     )}
                     <div
-                      className={`max-w-[80%] p-4 rounded-lg ${
+                      className={`max-w-[85%] md:max-w-[80%] p-3 md:p-4 rounded-lg ${
                         msg.role === "assistant"
                           ? "bg-white border border-amber-200 shadow-sm text-gray-900"
                           : "bg-amber-600 text-white"
@@ -847,7 +894,9 @@ export default function UHCCPortalSupport() {
                           {formatMessage(msg.content, msg.image)}
                         </div>
                       ) : (
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                        <div className="whitespace-pre-wrap text-sm md:text-base">
+                          {msg.content}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -856,15 +905,15 @@ export default function UHCCPortalSupport() {
                   {msg.role === "assistant" &&
                     msg.options &&
                     index === latestOptionsMessageIndex && (
-                      <div className="ml-11 mt-4 space-y-2">
-                        <p className="text-sm text-gray-600 mb-3">
+                      <div className="ml-8 md:ml-11 mt-3 md:mt-4 space-y-2">
+                        <p className="text-xs md:text-sm text-gray-600 mb-3">
                           Choose what applies to you:
                         </p>
                         {msg.options.map(option => (
                           <button
                             key={option.id}
                             onClick={() => handleOptionSelect(option)}
-                            className={`w-full text-left p-3 rounded-lg border ${option.color || "bg-gray-50 border-gray-200 hover:border-gray-400"} transition-all duration-200 hover:shadow-md text-gray-900`}
+                            className={`w-full text-left p-3 rounded-lg border ${option.color || "bg-gray-50 border-gray-200 hover:border-gray-400"} transition-all duration-200 hover:shadow-md text-gray-900 text-sm md:text-base`}
                           >
                             {option.text}
                           </button>
@@ -879,13 +928,18 @@ export default function UHCCPortalSupport() {
                               lastMessage.showInput = true;
                               lastMessage.options = undefined;
                               setCurrentChat({ ...currentChat });
-                              setLatestOptionsMessageIndex(null); // Hide options when switching to input
+                              setLatestOptionsMessageIndex(null);
                             }
                           }}
-                          className="w-full text-left p-3 rounded-lg border border-gray-300 bg-gray-50 hover:border-gray-400 transition-all duration-200 text-gray-600 flex items-center gap-2"
+                          className="w-full text-left p-3 rounded-lg border border-gray-300 bg-gray-50 hover:border-gray-400 transition-all duration-200 text-gray-600 flex items-center gap-2 text-sm md:text-base"
                         >
                           <MessageCircleIcon size={16} />
-                          None of these match - let me type my own response
+                          <span className="hidden sm:inline">
+                            None of these match - let me type my own response
+                          </span>
+                          <span className="sm:hidden">
+                            Type my own response
+                          </span>
                         </button>
                       </div>
                     )}
@@ -894,8 +948,8 @@ export default function UHCCPortalSupport() {
                   {msg.role === "assistant" &&
                     msg.showInput &&
                     index === currentChat.messages.length - 1 && (
-                      <div className="ml-11 mt-4">
-                        <div className="flex gap-3 items-end">
+                      <div className="ml-8 md:ml-11 mt-3 md:mt-4">
+                        <div className="flex gap-2 md:gap-3 items-end">
                           <div className="flex-1">
                             <textarea
                               value={message}
@@ -907,7 +961,7 @@ export default function UHCCPortalSupport() {
                                 }
                               }}
                               placeholder="Describe exactly what you see or what's happening..."
-                              className="w-full rounded-lg border border-amber-300 p-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none text-gray-900"
+                              className="w-full rounded-lg border border-amber-300 p-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none text-gray-900 text-sm md:text-base"
                               rows={3}
                             />
                           </div>
@@ -925,11 +979,11 @@ export default function UHCCPortalSupport() {
               ))}
 
               {isLoading && (
-                <div className="flex gap-3 justify-start">
-                  <div className="w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center">
-                    <HeadphonesIcon className="w-4 h-4 text-white" />
+                <div className="flex gap-2 md:gap-3 justify-start">
+                  <div className="w-7 h-7 md:w-8 md:h-8 bg-amber-600 rounded-full flex items-center justify-center">
+                    <HeadphonesIcon className="w-3 h-3 md:w-4 md:h-4 text-white" />
                   </div>
-                  <div className="bg-white border border-amber-200 shadow-sm p-4 rounded-lg">
+                  <div className="bg-white border border-amber-200 shadow-sm p-3 md:p-4 rounded-lg">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-2 h-2 bg-amber-400 rounded-full animate-bounce"
@@ -946,13 +1000,13 @@ export default function UHCCPortalSupport() {
               )}
 
               {error && (
-                <div className="flex justify-center">
+                <div className="flex justify-center px-2">
                   <div
                     className={`${
                       error.includes("slow down")
                         ? "bg-yellow-50 border-yellow-200 text-yellow-700"
                         : "bg-red-50 border-red-200 text-red-700"
-                    } border px-4 py-3 rounded-lg max-w-md`}
+                    } border px-3 md:px-4 py-3 rounded-lg max-w-md text-sm md:text-base`}
                   >
                     <div className="flex items-center gap-2">
                       <div
