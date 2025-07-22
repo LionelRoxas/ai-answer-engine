@@ -1032,6 +1032,7 @@ RULES FOR GENERATING OPTIONS:
 6. If user sentiment is frustrated or consecutive negatives >= 2, include a "I need help" option
 7. Always include a "Where is it?" option if the AI is telling them to look for the Forgot Username link or Forgot Password link
 8. Always have a positive outcome option like "Found it. What's next?" or "Trying now, hold on." if the AI is asking about checking email or finding something
+9. Always have a positive outcome option like "I did it. What's next?" if the AI is asking if they have tried something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
 10. When steps are skipped, generate one option for the previous step like "Hold on, I got [previous step] previously"
 11. Have a "We can stop here" option if the user's initial question has been answered 
