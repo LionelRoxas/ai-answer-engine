@@ -17,7 +17,7 @@ type MessageImage = {
   height?: number;
 };
 
-// Enhanced type for tracking conversation context
+// Enhanced type for tracking conversation context with loop detection
 type ConversationContext = {
   state: string;
   stepNumber: number;
@@ -25,6 +25,13 @@ type ConversationContext = {
   stuckIndicators: number;
   lastSuccessfulStep: number;
   userSentiment: "positive" | "neutral" | "frustrated";
+  // Enhanced loop detection properties
+  repetitiveResponses: {
+    [key: string]: number;
+  };
+  lastResponseType: string;
+  sameStepAttempts: number;
+  consecutiveNegatives: number;
 };
 
 // UHCC Non-Credit Portal Knowledge Base
@@ -176,7 +183,8 @@ const STEP_IMAGES = {
     id: "forgot_username_link",
     src: "/images/steps/forgot-username-link.PNG",
     alt: "Forgot Username link",
-    caption: "This is what the reset username email looks like. Look for the 'Your user name is' section inside that email.",
+    caption:
+      "This is what the reset username email looks like. Look for the 'Your user name is' section inside that email.",
     keywords: ["forgot username", "email", "link"],
     stepNumber: 3,
   },
@@ -193,7 +201,8 @@ const STEP_IMAGES = {
     id: "password_reset_email",
     src: "/images/steps/password-reset-email.PNG",
     alt: "Password reset email",
-    caption: "This is what the reset password email looks like. Once you receive it, check your inbox, then click the reset link in your email",
+    caption:
+      "This is what the reset password email looks like. Once you receive it, check your inbox, then click the reset link in your email",
     keywords: ["reset link", "password email", "reset password"],
     stepNumber: 5,
   },
@@ -204,6 +213,14 @@ const STEP_IMAGES = {
     caption: "Success! You're now logged into the portal",
     keywords: ["success", "logged in", "complete", "dashboard"],
     stepNumber: 6,
+  },
+  needs_support: {
+    id: "contact_support",
+    src: "/images/steps/portal-login-page.png",
+    alt: "Contact Support",
+    caption: "Contact support for personalized assistance",
+    keywords: ["support", "help", "contact"],
+    stepNumber: 0,
   },
 };
 
@@ -234,7 +251,7 @@ const CONTEXTUAL_IMAGES = {
   },
 };
 
-// Update the getResponseForState function to include scenarios where this image would be helpful
+// Enhanced getResponseForState function with support escalation
 function getResponseForState(
   state: string,
   context?: ConversationContext
@@ -242,9 +259,27 @@ function getResponseForState(
   message: string;
   image?: MessageImage;
 } {
+  // Check for support state or too many attempts
+  if (
+    state === "needs_support" ||
+    (context?.consecutiveNegatives ?? 0) >= 3 ||
+    (context?.sameStepAttempts ?? 0) >= 3
+  ) {
+    return {
+      message: `I notice you're having trouble with this step. Let me connect you with our support team who can provide personalized assistance:
+
+**📞 Call: 808-842-2563**
+**📧 Email: uhcccewd@hawaii.edu**
+**🕒 Hours: Mon-Fri 8AM-3PM**
+
+They can walk you through the process over the phone or help reset your account directly.`,
+      image: STEP_IMAGES.needs_support,
+    };
+  }
+
   const image = STEP_IMAGES[state as keyof typeof STEP_IMAGES];
 
-  // Add sentiment-aware modifications
+  // Add sentiment-aware modifications from first version
   const sentimentPrefix =
     context?.userSentiment === "frustrated"
       ? "I understand this is frustrating, but don't worry - "
@@ -371,7 +406,7 @@ ${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`,
   }
 }
 
-// Updated selectBestImage function with better step 5 handling
+// Enhanced selectBestImage function with all patterns from first version
 function selectBestImage(
   context: ConversationContext,
   aiResponse: string,
@@ -382,7 +417,6 @@ function selectBestImage(
     `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
 
   // Priority 1: Check user's response first for specific outcomes
-  // This ensures we show the right image based on what happened
   const userMessagePatterns = [
     {
       patterns: [
@@ -470,7 +504,6 @@ function selectBestImage(
   }
 
   // Priority 2: Direct instruction matching
-  // Check what the AI is actually telling the user to do RIGHT NOW
   const instructionPatterns = [
     {
       patterns: [
@@ -629,7 +662,7 @@ function selectBestImage(
   return STEP_IMAGES.initial;
 }
 
-// Update analyzeUserState to better handle step 3 confusion
+// Enhanced analyzeUserState with comprehensive loop detection
 function analyzeUserState(messages: any[]): ConversationContext {
   const context: ConversationContext = {
     state: "initial",
@@ -638,6 +671,10 @@ function analyzeUserState(messages: any[]): ConversationContext {
     stuckIndicators: 0,
     lastSuccessfulStep: 0,
     userSentiment: "neutral",
+    repetitiveResponses: {},
+    lastResponseType: "",
+    sameStepAttempts: 0,
+    consecutiveNegatives: 0,
   };
 
   const allMessages = messages
@@ -672,6 +709,57 @@ function analyzeUserState(messages: any[]): ConversationContext {
       });
     }
   });
+
+  // Enhanced loop detection from second version
+  const lastUserMessages = messages
+    .filter(m => m.role === "user")
+    .slice(-3)
+    .map(m => m.content?.toLowerCase() || "");
+
+  // Count negative responses
+  const negativePatterns = [
+    "not yet",
+    "nothing yet",
+    "didn't work",
+    "no",
+    "can't find",
+    "not there",
+    "nothing",
+    "still not",
+    "doesn't work",
+    "not working",
+    "can't see",
+    "don't see",
+    "where is it",
+    "i need help",
+    "help me",
+    "stuck",
+  ];
+
+  let consecutiveNegativeCount = 0;
+  lastUserMessages.forEach(msg => {
+    if (negativePatterns.some(pattern => msg.includes(pattern))) {
+      consecutiveNegativeCount++;
+    }
+  });
+  context.consecutiveNegatives = consecutiveNegativeCount;
+
+  // Track if stuck on same step
+  const lastSteps = messages
+    .filter(m => m.role === "assistant" && m.context)
+    .slice(-3)
+    .map(m => m.context?.stepNumber || 0);
+
+  if (lastSteps.length >= 3 && lastSteps.every(step => step === lastSteps[0])) {
+    context.sameStepAttempts = 3;
+  }
+
+  // If too many negatives or stuck, trigger support
+  if (consecutiveNegativeCount >= 3 || context.sameStepAttempts >= 3) {
+    context.state = "needs_support";
+    context.userSentiment = "frustrated";
+    return context;
+  }
 
   // Analyze sentiment and stuck patterns
   const frustrationIndicators = [
@@ -858,15 +946,34 @@ function analyzeUserState(messages: any[]): ConversationContext {
   return context;
 }
 
-// Enhanced response generation with sentiment awareness
+// Enhanced response generation with comprehensive options and intelligent fallbacks
 async function generateAIExpectedOutcomes(
   aiResponse: string,
   currentContext: ConversationContext,
   conversationHistory: any[]
 ): Promise<any> {
   // Check if the AI response includes contact info - if so, don't show options
-  if (aiResponse.includes("📞") || aiResponse.includes("contact:")) {
-    return { showInput: false };
+  if (
+    aiResponse.includes("📞") ||
+    aiResponse.includes("contact:") ||
+    currentContext.state === "needs_support"
+  ) {
+    return {
+      options: [
+        {
+          id: "call",
+          text: "Call support now",
+          action: "Call support now",
+          color: "bg-green-50 border-green-200 hover:border-green-400",
+        },
+        {
+          id: "continue",
+          text: "Keep trying myself",
+          action: "Keep trying myself",
+          color: "bg-blue-50 border-blue-200 hover:border-blue-400",
+        },
+      ],
+    };
   }
 
   // Analyze the AI's response more intelligently
@@ -904,6 +1011,8 @@ CURRENT CONTEXT:
 - Step Number: ${currentContext.stepNumber}
 - User Sentiment: ${currentContext.userSentiment}
 - Stuck Indicators: ${currentContext.stuckIndicators}
+- Consecutive Negatives: ${currentContext.consecutiveNegatives}
+- Same Step Attempts: ${currentContext.sameStepAttempts}
 - Attempted Emails: ${currentContext.attemptedEmails.length}
 - AI's Question/Action: "${lastQuestion || keyAction}"
 - Full AI Response: "${aiResponse}"
@@ -914,20 +1023,17 @@ ${conversationHistory
   .map(msg => `${msg.role}: ${msg.content}`)
   .join("\n")}
 
-UHCC PORTAL KNOWLEDGE:
-${JSON.stringify(UHCC_PORTAL_KNOWLEDGE, null, 2)}
-
 RULES FOR GENERATING OPTIONS:
 1. Generate 2-4 SHORT, NATURAL user responses (5-15 words max)
 2. Write from the user's perspective only
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
 5. Always include a "try different email" option when stuck on email-related steps
-6. If user sentiment is frustrated, include a "I need help" option
+6. If user sentiment is frustrated or consecutive negatives >= 2, include a "I need help" option
 7. Always include a "Where is it?" option if the AI is telling them to look for the Forgot Username link or Forgot Password link
 8. Always have a positive outcome option like "Found it. What's next?" or "Trying now, hold on." if the AI is asking about checking email or finding something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
-10. When steps are skipped, generate one option for the previous step like "Hold on, I got [lastQuestion || keyAction] previously"
+10. When steps are skipped, generate one option for the previous step like "Hold on, I got [previous step] previously"
 11. Have a "We can stop here" option if the user's initial question has been answered 
 
 RESPONSE PATTERNS BY QUESTION TYPE:
@@ -1022,9 +1128,11 @@ Generate ONLY the JSON, no explanations.`;
           });
         }
 
-        // Add help option if user is frustrated
+        // Add help option if user is frustrated or showing signs of being stuck
         if (
-          currentContext.userSentiment === "frustrated" &&
+          (currentContext.userSentiment === "frustrated" ||
+            currentContext.consecutiveNegatives >= 2 ||
+            currentContext.stuckIndicators >= 2) &&
           !parsedOutcomes.options.some((opt: any) =>
             opt.text.toLowerCase().includes("help")
           )
@@ -1051,7 +1159,7 @@ Generate ONLY the JSON, no explanations.`;
   }
 }
 
-// Enhanced intelligent fallback options
+// Enhanced intelligent fallback options with comprehensive logic
 function getIntelligentFallbackOptions(
   context: ConversationContext,
   aiResponse: string
@@ -1096,28 +1204,38 @@ function getIntelligentFallbackOptions(
     lowerResponse.includes("did you find") ||
     lowerResponse.includes("check your email")
   ) {
-    return {
-      options: [
-        {
-          id: "found",
-          text: "Found it!",
-          action: "Found it!",
-          color: "bg-green-50 border-green-200 hover:border-green-400",
-        },
-        {
-          id: "not_yet",
-          text: "Nothing yet",
-          action: "Nothing yet",
-          color: "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
-        },
-        {
-          id: "spam",
-          text: "Not in spam either",
-          action: "Not in spam either",
-          color: "bg-red-50 border-red-200 hover:border-red-400",
-        },
-      ],
-    };
+    const options = [
+      {
+        id: "found",
+        text: "Found it!",
+        action: "Found it!",
+        color: "bg-green-50 border-green-200 hover:border-green-400",
+      },
+      {
+        id: "not_yet",
+        text: "Nothing yet",
+        action: "Nothing yet",
+        color: "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
+      },
+      {
+        id: "spam",
+        text: "Not in spam either",
+        action: "Not in spam either",
+        color: "bg-red-50 border-red-200 hover:border-red-400",
+      },
+    ];
+
+    // Add "show me" option for steps 3 and 5
+    if (context.stepNumber === 3 || context.stepNumber === 5) {
+      options.push({
+        id: "show_me",
+        text: "Can you show me what the email looks like?",
+        action: "Can you show me what the email looks like?",
+        color: "bg-blue-50 border-blue-200 hover:border-blue-400",
+      });
+    }
+
+    return { options: options.slice(0, 4) };
   }
 
   if (lowerResponse.includes("have you") || lowerResponse.includes("did you")) {
@@ -1142,8 +1260,11 @@ function getIntelligentFallbackOptions(
       },
     ];
 
-    // Add help option if frustrated
-    if (context.userSentiment === "frustrated") {
+    // Add help option if frustrated or showing signs of being stuck
+    if (
+      context.userSentiment === "frustrated" ||
+      context.consecutiveNegatives >= 2
+    ) {
       options.push({
         id: "help",
         text: "I need help",
@@ -1152,7 +1273,7 @@ function getIntelligentFallbackOptions(
       });
     }
 
-    return { options };
+    return { options: options.slice(0, 4) };
   }
 
   // Default to text input if no good match
@@ -1226,7 +1347,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Enhanced system prompt section for contact form recognition
+    // Enhanced system prompt with comprehensive behavior rules
     const systemPrompt = `You are an expert UHCC portal support specialist. You're helping students recover their login credentials with warmth, patience, and expertise.
 
 CORE BEHAVIOR PRINCIPLES:
@@ -1260,11 +1381,19 @@ STEP 5 PASSWORD RESET EMAIL HANDLING:
   - RESPOND: "Look for the password reset email from UHCC - it will have a link to reset your password. Click that link to create your new password."
   - Make sure to differentiate this from the username email in Step 3
 
+AUTOMATIC SUPPORT ESCALATION:
+- If user has 3+ consecutive negative responses OR stuck on same step 3+ times:
+  - IMMEDIATELY provide contact info
+  - Don't repeat the same instructions
+  - Offer direct human help with empathy
+
 CURRENT USER CONTEXT:
 - State: ${conversationContext.state}
 - Step Number: ${conversationContext.stepNumber} of 6
 - User Sentiment: ${conversationContext.userSentiment}
 - Stuck Indicators: ${conversationContext.stuckIndicators}
+- Consecutive Negatives: ${conversationContext.consecutiveNegatives}
+- Same Step Attempts: ${conversationContext.sameStepAttempts}
 - Attempted Emails: ${conversationContext.attemptedEmails.join(", ") || "none yet"}
 - Last Successful Step: ${conversationContext.lastSuccessfulStep}
 ${pageContext ? `- Page Context: ${pageContext}` : ""}
@@ -1294,13 +1423,6 @@ SPECIFIC RESPONSES FOR COMMON SCENARIOS:
 - User at Step 5 says "where is it?" → "Check your email for the password reset email from UHCC - it will have a link to reset your password. Click that link to set your new password."
 - User at Step 5 says "can't find reset email" → "The password reset email should be from UHCC. Check your spam folder too. The email will contain a link to reset your password."
 
-CRITICAL UNDERSTANDING:
-- Validation error in Step 1 = SUCCESS (email is in system)
-- Contact form in Step 1 = FAILURE (email not in system, try different email)
-- Users often use wrong email - always offer to try different emails
-- Emails often go to spam - always remind to check spam folder
-- Some users get stuck in loops - recognize patterns and suggest restart
-
 SENTIMENT-AWARE RESPONSES:
 - If frustrated: Acknowledge frustration, be extra encouraging, offer direct help
 - If positive: Match their energy, celebrate progress
@@ -1328,9 +1450,6 @@ Contact:
 📞 808-842-2563
 📧 uhcccewd@hawaii.edu
 🕒 Mon-Fri 8AM-3PM
-
-UHCC PORTAL KNOWLEDGE BASE:
-${JSON.stringify(UHCC_PORTAL_KNOWLEDGE, null, 2)}
 
 FULL CONVERSATION HISTORY:
 ${messages.map((msg: any, index: number) => `${index + 1}. ${msg.role}: ${msg.content}`).join("\n")}
@@ -1387,6 +1506,8 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
         state: conversationContext.state,
         step: conversationContext.stepNumber,
         sentiment: conversationContext.userSentiment,
+        negatives: conversationContext.consecutiveNegatives,
+        attempts: conversationContext.sameStepAttempts,
         attemptedEmails: conversationContext.attemptedEmails.length,
       },
     });
