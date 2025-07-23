@@ -32,6 +32,8 @@ type ConversationContext = {
   lastResponseType: string;
   sameStepAttempts: number;
   consecutiveNegatives: number;
+  // Track displayed images to show each only once
+  displayedImages: string[];
 };
 
 // UHCC Non-Credit Portal Knowledge Base
@@ -262,8 +264,8 @@ function getResponseForState(
   // Check for support state or too many attempts
   if (
     state === "needs_support" ||
-    (context?.consecutiveNegatives ?? 0) >= 3 ||
-    (context?.sameStepAttempts ?? 0) >= 3
+    (context?.consecutiveNegatives ?? 0) >= 4 ||
+    (context?.sameStepAttempts ?? 0) >= 4
   ) {
     return {
       message: `I notice you're having trouble with this step. Let me connect you with our support team who can provide personalized assistance:
@@ -406,15 +408,17 @@ ${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`,
   }
 }
 
-// Enhanced selectBestImage function with all patterns from first version
+// Enhanced selectBestImage function with all patterns from first version and image tracking
 function selectBestImage(
   context: ConversationContext,
   aiResponse: string,
   userMessage: string,
   pageContext: string
-): MessageImage {
+): MessageImage | null {
   const combinedContext =
     `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
+
+  let selectedImage: MessageImage | null = null;
 
   // Priority 1: Check user's response first for specific outcomes
   const userMessagePatterns = [
@@ -494,172 +498,193 @@ function selectBestImage(
             context.stepNumber === patternGroup.stepNumber;
 
           if (hasRequiredContext && !hasExcludedContext && stepMatches) {
-            return patternGroup.image;
+            selectedImage = patternGroup.image;
+            break;
           }
         } else {
-          return patternGroup.image;
+          selectedImage = patternGroup.image;
+          break;
         }
       }
     }
+    if (selectedImage) break;
   }
 
-  // Priority 2: Direct instruction matching
-  const instructionPatterns = [
-    {
-      patterns: [
-        "i am a new user",
-        "right side",
-        "check if your email",
-        "test your email",
-        "enter your email",
-        "try a different email",
-        "test a different email",
-      ],
-      image: STEP_IMAGES.checking_email_validation,
-    },
-    {
-      patterns: [
-        "validation error",
-        "existing student record",
-        "email is in the system",
-        "that's exactly what we wanted",
-      ],
-      image: STEP_IMAGES.email_validated_ready_for_username,
-    },
-    {
-      patterns: [
-        "forgot username",
-        'click "forgot username"',
-        "go back to the left side",
-        "i am an existing user",
-        "left side",
-      ],
-      excludeSteps: [5, 6], // Don't use this image at steps 5 or 6
-      image: CONTEXTUAL_IMAGES.forgot_username_link,
-    },
-    {
-      patterns: [
-        "check your email",
-        "check your inbox",
-        "spam folder",
-        "find your username",
-        "looking for the username email",
-      ],
-      contextRequired: ["username"],
-      excludeSteps: [5], // Don't use this for step 5
-      image: STEP_IMAGES.username_email_sent,
-    },
-    {
-      patterns: [
-        "look for the forgot username link",
-        "find the link in the email",
-        "username link in your email",
-        "click the link in the email",
-        "forgot username link in the email",
-        "inside the email",
-        "in that email",
-      ],
-      excludeSteps: [5],
-      image: STEP_IMAGES.look_for_forgot_username_link_on_email,
-    },
-    {
-      patterns: [
-        "forgot password page",
-        "enter the username",
-        "enter your username",
-      ],
-      excludeSteps: [5, 6], // Only for step 4, not 5 or 6
-      image: STEP_IMAGES.ready_for_password_reset,
-    },
-    {
-      patterns: ["check your email", "spam folder", "password reset email"],
-      contextRequired: ["password", "reset"],
-      stepNumber: 5,
-      image: STEP_IMAGES.password_reset_in_progress,
-    },
-    {
-      patterns: [
-        "reset link",
-        "click the reset link",
-        "set your new password",
-        "create your new password",
-        "click that link",
-      ],
-      contextRequired: ["password"],
-      image: STEP_IMAGES.password_reset_in_progress,
-    },
-    {
-      patterns: [
-        "successfully",
-        "logged in",
-        "you're all set",
-        "success!",
-        "now that you've found the password reset email",
-        "log in with your username and new password",
-        "you can now log in",
-        "you're now logged in",
-        "have a great day",
-        "you're all set to log in",
-      ],
-      image: STEP_IMAGES.process_complete,
-    },
-    {
-      patterns: ["login error", "getting an error", "can't log in"],
-      image: STEP_IMAGES.has_login_error,
-    },
-  ];
+  // Priority 2: Direct instruction matching (only if no image selected yet)
+  if (!selectedImage) {
+    const instructionPatterns = [
+      {
+        patterns: [
+          "i am a new user",
+          "right side",
+          "check if your email",
+          "test your email",
+          "enter your email",
+          "try a different email",
+          "test a different email",
+        ],
+        image: STEP_IMAGES.checking_email_validation,
+      },
+      {
+        patterns: [
+          "validation error",
+          "existing student record",
+          "email is in the system",
+          "that's exactly what we wanted",
+        ],
+        image: STEP_IMAGES.email_validated_ready_for_username,
+      },
+      {
+        patterns: [
+          "forgot username",
+          'click "forgot username"',
+          "go back to the left side",
+          "i am an existing user",
+          "left side",
+        ],
+        excludeSteps: [5, 6], // Don't use this image at steps 5 or 6
+        image: CONTEXTUAL_IMAGES.forgot_username_link,
+      },
+      {
+        patterns: [
+          "check your email",
+          "check your inbox",
+          "spam folder",
+          "find your username",
+          "looking for the username email",
+        ],
+        contextRequired: ["username"],
+        excludeSteps: [5], // Don't use this for step 5
+        image: STEP_IMAGES.username_email_sent,
+      },
+      {
+        patterns: [
+          "look for the forgot username link",
+          "find the link in the email",
+          "username link in your email",
+          "click the link in the email",
+          "forgot username link in the email",
+          "inside the email",
+          "in that email",
+        ],
+        excludeSteps: [5],
+        image: STEP_IMAGES.look_for_forgot_username_link_on_email,
+      },
+      {
+        patterns: [
+          "forgot password page",
+          "enter the username",
+          "enter your username",
+        ],
+        excludeSteps: [5, 6], // Only for step 4, not 5 or 6
+        image: STEP_IMAGES.ready_for_password_reset,
+      },
+      {
+        patterns: ["check your email", "spam folder", "password reset email"],
+        contextRequired: ["password", "reset"],
+        stepNumber: 5,
+        image: STEP_IMAGES.password_reset_in_progress,
+      },
+      {
+        patterns: [
+          "reset link",
+          "click the reset link",
+          "set your new password",
+          "create your new password",
+          "click that link",
+        ],
+        contextRequired: ["password"],
+        image: STEP_IMAGES.password_reset_in_progress,
+      },
+      {
+        patterns: [
+          "successfully",
+          "logged in",
+          "you're all set",
+          "success!",
+          "now that you've found the password reset email",
+          "log in with your username and new password",
+          "you can now log in",
+          "you're now logged in",
+          "have a great day",
+          "you're all set to log in",
+        ],
+        image: STEP_IMAGES.process_complete,
+      },
+      {
+        patterns: ["login error", "getting an error", "can't log in"],
+        image: STEP_IMAGES.has_login_error,
+      },
+    ];
 
-  // Check each pattern group in order
-  for (const patternGroup of instructionPatterns) {
-    // Check if current step is excluded
-    if (
-      patternGroup.excludeSteps &&
-      patternGroup.excludeSteps.includes(context.stepNumber)
-    ) {
-      continue;
-    }
-
-    // Check if step number matches (if specified)
-    if (
-      patternGroup.stepNumber &&
-      patternGroup.stepNumber !== context.stepNumber
-    ) {
-      continue;
-    }
-
-    // Check if required context exists
-    if (patternGroup.contextRequired) {
-      const hasRequiredContext = patternGroup.contextRequired.every(req =>
-        combinedContext.includes(req)
-      );
-      if (!hasRequiredContext) {
+    // Check each pattern group in order
+    for (const patternGroup of instructionPatterns) {
+      // Check if current step is excluded
+      if (
+        patternGroup.excludeSteps &&
+        patternGroup.excludeSteps.includes(context.stepNumber)
+      ) {
         continue;
       }
-    }
 
-    // Check patterns
-    for (const pattern of patternGroup.patterns) {
-      if (combinedContext.includes(pattern)) {
-        return patternGroup.image;
+      // Check if step number matches (if specified)
+      if (
+        patternGroup.stepNumber &&
+        patternGroup.stepNumber !== context.stepNumber
+      ) {
+        continue;
+      }
+
+      // Check if required context exists
+      if (patternGroup.contextRequired) {
+        const hasRequiredContext = patternGroup.contextRequired.every(req =>
+          combinedContext.includes(req)
+        );
+        if (!hasRequiredContext) {
+          continue;
+        }
+      }
+
+      // Check patterns
+      for (const pattern of patternGroup.patterns) {
+        if (combinedContext.includes(pattern)) {
+          selectedImage = patternGroup.image;
+          break;
+        }
+      }
+      if (selectedImage) break;
+    }
+  }
+
+  // Priority 3: Check contextual images (only if no image selected yet)
+  if (!selectedImage) {
+    for (const image of Object.values(CONTEXTUAL_IMAGES)) {
+      if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
+        selectedImage = image;
+        break;
       }
     }
   }
 
-  // Priority 3: Check contextual images
-  for (const image of Object.values(CONTEXTUAL_IMAGES)) {
-    if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
-      return image;
+  // Priority 4: State-based fallback (only if no image selected yet)
+  if (!selectedImage) {
+    const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
+    if (stateImage) {
+      selectedImage = stateImage;
     }
   }
 
-  // Priority 4: State-based fallback
-  const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
-  if (stateImage) {
-    return stateImage;
+  // Priority 5: Default to initial (only if no image selected yet)
+  if (!selectedImage) {
+    selectedImage = STEP_IMAGES.initial;
   }
 
-  // Priority 5: Default to initial
-  return STEP_IMAGES.initial;
+  // Check if this image has already been displayed
+  if (selectedImage && context.displayedImages.includes(selectedImage.id)) {
+    return null; // Don't show the image again
+  }
+
+  return selectedImage;
 }
 
 // Enhanced analyzeUserState with comprehensive loop detection
@@ -675,6 +700,7 @@ function analyzeUserState(messages: any[]): ConversationContext {
     lastResponseType: "",
     sameStepAttempts: 0,
     consecutiveNegatives: 0,
+    displayedImages: [],
   };
 
   const allMessages = messages
@@ -707,6 +733,15 @@ function analyzeUserState(messages: any[]): ConversationContext {
           context.attemptedEmails.push(email.toLowerCase());
         }
       });
+    }
+  });
+
+  // Extract previously displayed images to avoid showing them again
+  messages.forEach(msg => {
+    if (msg.role === "assistant" && msg.image?.id) {
+      if (!context.displayedImages.includes(msg.image.id)) {
+        context.displayedImages.push(msg.image.id);
+      }
     }
   });
 
@@ -1024,15 +1059,13 @@ ${conversationHistory
   .join("\n")}
 
 RULES FOR GENERATING OPTIONS:
-1. Generate 2-4 SHORT, NATURAL user responses (5-15 words max)
+1. Generate 2-3 SHORT, NATURAL user responses (5-15 words max)
 2. Write from the user's perspective only
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
 5. Always include a "try different email" option when stuck on email-related steps
 6. If user sentiment is frustrated or consecutive negatives >= 2, include a "I need help" option
-7. Always include a "Where is it?" option if the AI is telling them to look for the Forgot Username link or Forgot Password link
-8. Always have a positive outcome option like "Found it. What's next?" or "Trying now, hold on." if the AI is asking about checking email or finding something
-9. Always have a positive outcome option like "I did it. What's next?" if the AI is asking if they have tried something
+8. Always have a positive outcome option like "I did it. What's next in the step?" if the AI is asking about checking email or finding something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
 10. When steps are skipped, generate one option for the previous step like "Hold on, I got [previous step] previously"
 11. Have a "We can stop here" option if the user's initial question has been answered 
@@ -1352,7 +1385,7 @@ export async function POST(req: Request) {
     const systemPrompt = `You are an expert UHCC portal support specialist. You're helping students recover their login credentials with warmth, patience, and expertise.
 
 CORE BEHAVIOR PRINCIPLES:
-- Move at a slow, steady pace. Do not skip steps and make sure to be thorough in Steps 3 and 5. Do not miss the inbox/spam checking, and even displaying what the email looks like.
+- Move at a slow, steady pace. Do not skip steps and make sure to be thorough in Steps 1, 3 and 5. Do not miss the inbox/spam checking, and even displaying what the email looks like. Do not miss the validation error in Step 1.
 - Always ask for confirmation before moving to the next step
 - Be conversational and encouraging - talk like you're helping a friend
 - Keep responses focused and brief (2-3 sentences max) 
@@ -1478,6 +1511,14 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
       pageContext
     );
 
+    // If an image was selected, add it to the displayed images list
+    if (
+      selectedImage &&
+      !conversationContext.displayedImages.includes(selectedImage.id)
+    ) {
+      conversationContext.displayedImages.push(selectedImage.id);
+    }
+
     // Generate intelligent expected outcomes
     const expectedOutcomes = await generateAIExpectedOutcomes(
       finalResponse,
@@ -1501,7 +1542,7 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
 
     return NextResponse.json({
       message: finalResponse,
-      image: selectedImage, // Use intelligently selected image
+      ...(selectedImage && { image: selectedImage }), // Only include image if it exists
       ...expectedOutcomes,
       debug: {
         state: conversationContext.state,
@@ -1510,6 +1551,7 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
         negatives: conversationContext.consecutiveNegatives,
         attempts: conversationContext.sameStepAttempts,
         attemptedEmails: conversationContext.attemptedEmails.length,
+        displayedImages: conversationContext.displayedImages.length,
       },
     });
   } catch (error) {
