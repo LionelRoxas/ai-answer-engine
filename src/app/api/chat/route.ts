@@ -1059,12 +1059,12 @@ ${conversationHistory
   .join("\n")}
 
 RULES FOR GENERATING OPTIONS:
-1. Generate 2-3 SHORT, NATURAL user responses (5-15 words max)
+1. Generate 2-3 SHORT, NATURAL user responses (5-30 words max)
 2. Write from the user's perspective only
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
-5. Always include a "try different email" option when stuck on email-related steps
-6. If user sentiment is frustrated or consecutive negatives >= 2, include a "I need help" option
+5. Always include a "Let me try a different email" option when stuck on email-related steps
+6. If user sentiment is frustrated or consecutive negatives >= 3, include a "I need help" option
 8. Always have a positive outcome option like "I did it. What's next in the step?" if the AI is asking about checking email or finding something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
 10. When steps are skipped, generate one option for the previous step like "Hold on, I got [previous step] previously"
