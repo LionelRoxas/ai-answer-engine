@@ -1505,11 +1505,11 @@ export async function POST(req: Request) {
     let pageContext = "";
 
     if (url) {
-      console.log("URL found:", url[0]);
+      // console.log("URL found:", url[0]);
       const pageData = await scrapeUrl(url[0]);
 
       if (pageData && pageData.content) {
-        console.log("Page content retrieved");
+        // console.log("Page content retrieved");
 
         // Analyze what page they're showing us
         const content = pageData.content.toLowerCase();

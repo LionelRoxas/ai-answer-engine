@@ -78,6 +78,12 @@ export default function UHCCPortalSupport() {
     number | null
   >(null);
 
+  const [rateLimitExpired, setRateLimitExpired] = useState(false);
+  const [failedMessage, setFailedMessage] = useState<string>("");
+  const [countdownTime, setCountdownTime] = useState<number | null>(null);
+  const [totalWaitTime, setTotalWaitTime] = useState<number>(60); // Track total wait time for progress bar
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const [rateLimitInfo, setRateLimitInfo] = useState<{
     remaining?: number;
     limit?: number;
@@ -245,6 +251,14 @@ export default function UHCCPortalSupport() {
     const messageToSend = customMessage || message;
     if (!messageToSend.trim()) return;
     setError(null);
+    setRateLimitExpired(false); // Reset rate limit expired state
+    setCountdownTime(null); // Reset countdown
+
+    // Clear any existing countdown interval
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
 
     setMessagesSent(prev => prev + 1);
 
@@ -284,14 +298,60 @@ export default function UHCCPortalSupport() {
         const rateLimitData = await response.json();
         const waitTime = rateLimitData.timeRemaining || 60;
 
+        // Remove the user message since it failed
+        setCurrentChat(prev => ({
+          ...prev,
+          messages: prev.messages.slice(0, -1),
+        }));
+        setChats(prev =>
+          prev.map(chat =>
+            chat.id === currentChat.id
+              ? { ...chat, messages: chat.messages.slice(0, -1) }
+              : chat
+          )
+        );
+
+        // Store the failed message and start countdown
+        setFailedMessage(messageToSend);
+        setCountdownTime(waitTime + 3);
+        setTotalWaitTime(waitTime + 3); // Store total wait time for progress calculation
         setError(
           `Please slow down! You can send another message in ${waitTime} seconds.`
         );
 
-        setTimeout(() => {
-          setError(null);
-          fetchRateLimitStatus();
-        }, waitTime * 1000);
+        // Start the countdown timer
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+        }
+
+        countdownIntervalRef.current = setInterval(() => {
+          setCountdownTime(prev => {
+            if (prev === null || prev <= 1) {
+              if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+              }
+
+              // Show "preparing to retry" message
+              setError("Preparing to retry... please wait a moment.");
+
+              // Add a small delay before allowing retry to ensure server rate limit has expired
+              setTimeout(async () => {
+                // Verify with server that rate limit has expired
+                await fetchRateLimitStatus();
+                setError(null);
+                setRateLimitExpired(true);
+              }, 2000); // Wait 2 extra seconds after countdown finishes
+
+              return null;
+            }
+            const newTime = prev - 1;
+            setError(
+              `Please slow down! You can send another message in ${newTime} seconds.`
+            );
+            return newTime;
+          });
+        }, 1000);
 
         return;
       }
@@ -329,9 +389,77 @@ export default function UHCCPortalSupport() {
     } catch (error) {
       console.error("Error:", error);
       setError("Connection failed. Please try again.");
+      setRateLimitExpired(true); // Also show input on connection error
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Add cleanup effect for countdown interval
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Add this new component for the rate limit recovery input
+  // Replace your existing RateLimitRecoveryInput component with this fixed version:
+
+  const RateLimitRecoveryInput = () => {
+    // Get the current textarea value (either from message state or failedMessage)
+    const currentValue = message || failedMessage;
+
+    const sendMessage = async () => {
+      const messageToSend = currentValue.trim();
+      if (messageToSend) {
+        // Double-check rate limit status before sending
+        await fetchRateLimitStatus();
+
+        handleSend(messageToSend); // Pass the message explicitly
+        setRateLimitExpired(false);
+        setFailedMessage(""); // Clear failed message after sending
+      }
+    };
+
+    return (
+      <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <p className="text-sm text-yellow-800 mb-3">
+          {failedMessage
+            ? "Ready to retry your message:"
+            : "You can now send a message:"}
+        </p>
+        <div className="flex gap-2 md:gap-3 items-end">
+          <div className="flex-1">
+            <textarea
+              value={currentValue}
+              onChange={e => {
+                const newValue = e.target.value;
+                setMessage(newValue);
+                if (failedMessage) setFailedMessage(""); // Clear failed message when user starts typing
+              }}
+              onKeyPress={e => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder="Describe exactly what you see or what's happening..."
+              className="w-full rounded-lg border border-yellow-300 p-3 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent resize-none text-gray-900 text-sm md:text-base"
+              rows={3}
+            />
+          </div>
+          <button
+            onClick={sendMessage}
+            disabled={isLoading || !currentValue.trim()}
+            className="bg-yellow-600 text-white p-3 rounded-lg hover:bg-yellow-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0"
+          >
+            <SendIcon size={16} />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const RateLimitIndicator = ({
@@ -347,9 +475,7 @@ export default function UHCCPortalSupport() {
         <div className="flex items-center gap-2 text-sm text-white/90">
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-            <span className="text-xs">
-              {messagesSent} messages sent
-            </span>
+            <span className="text-xs">{messagesSent} messages sent</span>
           </div>
         </div>
       );
@@ -361,9 +487,7 @@ export default function UHCCPortalSupport() {
       <div className="flex items-center gap-2 text-sm text-white/90">
         <div className="flex items-center gap-1">
           <div className={`w-2 h-2 rounded-full ${color}`}></div>
-          <span className="text-xs">
-            {messagesSent} messages sent
-          </span>
+          <span className="text-xs">{messagesSent} messages sent</span>
         </div>
       </div>
     );
@@ -999,6 +1123,11 @@ export default function UHCCPortalSupport() {
                 </div>
               )}
 
+              {/* Rate Limit Recovery Input */}
+              {rateLimitExpired &&
+                !isLoading &&
+                currentChat.messages.length > 0 && <RateLimitRecoveryInput />}
+
               {error && (
                 <div className="flex justify-center px-2">
                   <div
@@ -1016,7 +1145,36 @@ export default function UHCCPortalSupport() {
                             : "bg-red-500"
                         }`}
                       ></div>
-                      {error}
+                      <div className="flex-1">
+                        {error}
+                        {/* Live countdown progress bar */}
+                        {countdownTime !== null &&
+                          error.includes("slow down") && (
+                            <div className="mt-2">
+                              <div className="w-full bg-yellow-200 rounded-full h-2">
+                                <div
+                                  className="bg-yellow-500 h-2 rounded-full transition-all duration-1000 ease-linear"
+                                  style={{
+                                    width: `${((totalWaitTime - countdownTime) / totalWaitTime) * 100}%`,
+                                  }}
+                                ></div>
+                              </div>
+                              <div className="flex justify-between items-center mt-1 text-xs">
+                                <span className="animate-pulse">
+                                  ⏱️ {countdownTime}s remaining
+                                </span>
+                                <span className="font-mono">
+                                  {Math.round(
+                                    ((totalWaitTime - countdownTime) /
+                                      totalWaitTime) *
+                                      100
+                                  )}
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -9,17 +9,17 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-// More lenient rate limiting for a support chat application
+// FIXED: Use fixedWindow instead of slidingWindow for predictable reset times
 const rateLimit = new Ratelimit({
   redis: redis,
-  limiter: Ratelimit.slidingWindow(50, "60 s"), // 50 requests per minute (very generous)
+  limiter: Ratelimit.fixedWindow(50, "60 s"), // 50 requests per 60-second fixed window
   analytics: true,
 });
 
-// Even more lenient for API calls specifically
+// Same fix for API rate limit
 const apiRateLimit = new Ratelimit({
   redis: redis,
-  limiter: Ratelimit.slidingWindow(50, "60 s"), // 50 API calls per minute
+  limiter: Ratelimit.fixedWindow(50, "60 s"), // 50 API calls per 60-second fixed window
   analytics: true,
 });
 
@@ -38,6 +38,7 @@ export async function middleware(request: NextRequest) {
       "/_next/static",
       "/_next/image",
       "/images",
+      "/api/rate-limit-status", // Don't rate limit the status check endpoint
     ];
 
     const shouldSkip = skipPaths.some(path =>
@@ -54,6 +55,20 @@ export async function middleware(request: NextRequest) {
     const { success, limit, reset, remaining } =
       await currentRateLimit.limit(ip);
 
+    // Add debug logging to understand timing
+    if (!success) {
+      const now = Date.now();
+      const timeRemaining = Math.ceil((reset - now) / 1000);
+      // console.log("Rate limit hit:", {
+      //   ip,
+      //   reset,
+      //   now,
+      //   timeRemaining,
+      //   resetDate: new Date(reset).toISOString(),
+      //   nowDate: new Date(now).toISOString(),
+      // });
+    }
+
     const response = success
       ? NextResponse.next()
       : NextResponse.json(
@@ -62,8 +77,8 @@ export async function middleware(request: NextRequest) {
             message:
               "You're sending messages too quickly. Please wait a moment before trying again.",
             reset: reset,
-            timeRemaining: Math.ceil((reset - Date.now()) / 1000),
-            retryAfter: Math.ceil((reset - Date.now()) / 1000),
+            timeRemaining: Math.max(Math.ceil((reset - Date.now()) / 1000), 1), // At least 1 second
+            retryAfter: Math.max(Math.ceil((reset - Date.now()) / 1000), 1),
           },
           { status: 429 }
         );
@@ -74,10 +89,8 @@ export async function middleware(request: NextRequest) {
     response.headers.set("X-RateLimit-Reset", reset.toString());
 
     if (!success) {
-      response.headers.set(
-        "Retry-After",
-        Math.ceil((reset - Date.now()) / 1000).toString()
-      );
+      const retryAfter = Math.max(Math.ceil((reset - Date.now()) / 1000), 1);
+      response.headers.set("Retry-After", retryAfter.toString());
     }
 
     return response;
@@ -89,7 +102,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all requests except static files
+    // Match all requests except static files and rate limit status endpoint
     "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|images).*)",
   ],
 };

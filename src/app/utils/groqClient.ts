@@ -10,8 +10,8 @@ interface ChatMessage {
 }
 
 export async function getGroqResponse(chatMessages: ChatMessage[]) {
-  console.log("Starting groq api request");
-  console.log("messages", chatMessages);
+  // console.log("Starting groq api request");
+  // console.log("messages", chatMessages);
 
   try {
     const response = await groq.chat.completions.create({
@@ -22,7 +22,7 @@ export async function getGroqResponse(chatMessages: ChatMessage[]) {
       top_p: 0.9, // Focused but diverse responses
     });
 
-    console.log("Received groq api response");
+    // console.log("Received groq api response");
     return response.choices[0].message.content;
   } catch (error) {
     console.error("Groq API error:", error);
