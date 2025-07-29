@@ -135,14 +135,6 @@ const UHCC_PORTAL_KNOWLEDGE = {
 
 // Enhanced STEP_IMAGES with intelligent mapping
 const STEP_IMAGES = {
-  initial: {
-    id: "portal_login",
-    src: "/images/steps/portal-login-page.png",
-    alt: "UHCC Portal Login Page",
-    caption: "The main UHCC portal login page",
-    keywords: ["portal", "login page", "main", "start", "beginning"],
-    stepNumber: 0,
-  },
   has_login_error: {
     id: "login_error",
     src: "/images/steps/login-error.png",
@@ -228,13 +220,13 @@ const STEP_IMAGES = {
 
 // Additional context-specific images
 const CONTEXTUAL_IMAGES = {
-  contact_form: {
-    id: "contact_form_error",
+  personal_information_form: {
+    id: "personal_information_form_error",
     src: "/images/steps/contact-form-error.png",
     alt: "Contact form appears",
     caption:
-      "If you see this contact form, your email is NOT in the system - try a different email",
-    keywords: ["contact form", "email not found", "wrong email"],
+      "If you see this personal information form, your email is NOT in the system - try a different email",
+    keywords: ["personal information form", "email not found", "wrong email"],
   },
   spam_folder: {
     id: "spam_folder_check",
@@ -302,7 +294,7 @@ What's happening when you try to log in? Are you getting some kind of error mess
       return {
         message: `${sentimentPrefix}I see you're getting a login error - that's frustrating! Don't worry, we can fix this with a simple 6-step process.
 
-First, let's check if your email is in the system. Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and look for the RIGHT SIDE where it says "I am a new user" - click there and enter your email.
+First, let's check if your email is in the system. Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and look for the RIGHT SIDE where it says "I am a new user" - go there and enter your email.
 
 What happens when you do that?`,
         image,
@@ -381,7 +373,7 @@ Sometimes the email you think you used isn't the one in the system. Let's go bac
 Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and use the "I am a new user" section on the RIGHT SIDE to test a different email address.
 
 What other email addresses might you have used when you first registered?`,
-        image: CONTEXTUAL_IMAGES.contact_form,
+        image: CONTEXTUAL_IMAGES.personal_information_form,
       };
 
     case "process_complete":
@@ -409,7 +401,137 @@ ${UHCC_PORTAL_KNOWLEDGE.contact_info.formatted}`,
 }
 
 // Enhanced selectBestImage function with all patterns from first version and image tracking
-function selectBestImage(
+// AI-powered selectBestImage function with strict step controls
+async function selectBestImage(
+  context: ConversationContext,
+  aiResponse: string,
+  userMessage: string,
+  pageContext: string
+): Promise<MessageImage | null> {
+  const combinedContext = `${aiResponse} ${userMessage} ${pageContext}`;
+
+  // Create a comprehensive prompt for AI image selection
+  const imageSelectionPrompt = `You are an expert at selecting the most appropriate visual aid for UHCC portal support conversations.
+
+CURRENT CONVERSATION CONTEXT:
+- User State: ${context.state}
+- Step Number: ${context.stepNumber} of 6
+- User Message: "${userMessage}"
+- AI Response: "${aiResponse}"
+- Page Context: "${pageContext}"
+- Combined Context: "${combinedContext}"
+- User Sentiment: ${context.userSentiment}
+- Previously Displayed Images: [${context.displayedImages.join(", ")}]
+
+AVAILABLE IMAGES AND WHEN TO USE THEM:
+
+STEP IMAGES:
+- "portal_login": Main login page - use for initial contact or general orientation
+- "login_error": Login error message - use when user reports login errors
+- "new_user_section": RIGHT SIDE validation area - use when directing to email validation (Step 1)
+- "validation_error_good": Success validation error - use when user gets "existing student record" message (Step 2)
+- "check_email": Email inbox reminder - use when telling user to check email for username (Step 3)
+- "forgot_username_link": Username email content - use when user needs to see what's IN the username email (Step 3)
+- "forgot_password_page": Password reset form - use when directing to password reset with username (Step 4)
+- "password_reset_email": Password reset email content - use when user needs to see what's IN the password reset email (Step 5)
+- "login_success": Successful login screen - use when process is complete (Step 6)
+- "contact_support": Support information - use when escalating to human help
+
+CONTEXTUAL IMAGES:
+- "personal_information_form_error": Contact form appears - use when email is NOT in system
+- "spam_folder_check": Spam folder reminder - use when user can't find emails
+- "forgot_username_location": Username link location - use when directing to LEFT side username link
+
+CRITICAL RULES:
+1. NEVER suggest an image that's already in the displayedImages list
+2. Match the image to the SPECIFIC step and context
+3. For Step 3: Use "forgot_username_link" when user is confused about what's IN the email
+4. For Step 5: Use "password_reset_email" when user is confused about what's IN the email
+5. Use "personal_information_form_error" when user mentions personal information form/info appearing
+6. Use "validation_error_good" when celebrating the validation error success
+7. Use "new_user_section" when directing to Step 1 email validation
+8. Use "contact_support" when user is frustrated or stuck
+9. Consider user sentiment - frustrated users might need "contact_support"
+10. If no image is appropriate or would be helpful, return "none"
+
+STEP-SPECIFIC GUIDANCE:
+- Step 1: Show validation process ("new_user_section") or personal information form error
+- Step 2: Show validation success ("validation_error_good") or username link location
+- Step 3: Show email checking ("check_email") or email content ("forgot_username_link")
+- Step 4: Show password reset form ("forgot_password_page")
+- Step 5: Show email checking or reset email content ("password_reset_email")
+- Step 6: Show success ("login_success")
+
+RESPOND WITH ONLY THE IMAGE ID (like "new_user_section") OR "none" if no image is appropriate.`;
+
+  try {
+    const imageMessages = [
+      { role: "system" as const, content: imageSelectionPrompt },
+      {
+        role: "user" as const,
+        content:
+          "Based on the conversation context, which image would be most helpful right now?",
+      },
+    ];
+
+    const imageResponse = await getGroqResponse(imageMessages);
+    const selectedImageId = (imageResponse ?? "").trim().toLowerCase();
+
+    // Find the matching image
+    let selectedImage: MessageImage | null = null;
+
+    // Check STEP_IMAGES first
+    for (const [, image] of Object.entries(STEP_IMAGES)) {
+      if (image.id === selectedImageId) {
+        selectedImage = image;
+        break;
+      }
+    }
+
+    // Check CONTEXTUAL_IMAGES if not found
+    if (!selectedImage) {
+      for (const [, image] of Object.entries(CONTEXTUAL_IMAGES)) {
+        if (image.id === selectedImageId) {
+          selectedImage = image;
+          break;
+        }
+      }
+    }
+
+    // If AI said "none" or image not found, use fallback logic
+    if (!selectedImage || selectedImageId === "none") {
+      return getOriginalImageSelection(
+        context,
+        aiResponse,
+        userMessage,
+        pageContext
+      );
+    }
+
+    // Check if this image has already been displayed
+    if (selectedImage && context.displayedImages.includes(selectedImage.id)) {
+      return getOriginalImageSelection(
+        context,
+        aiResponse,
+        userMessage,
+        pageContext
+      );
+    }
+
+    return selectedImage;
+  } catch (error) {
+    console.error("Error in AI image selection:", error);
+    return getOriginalImageSelection(
+      context,
+      aiResponse,
+      userMessage,
+      pageContext
+    );
+  }
+}
+
+// Original image selection logic as fallback with strict step controls
+function getOriginalImageSelection(
   context: ConversationContext,
   aiResponse: string,
   userMessage: string,
@@ -417,7 +539,6 @@ function selectBestImage(
 ): MessageImage | null {
   const combinedContext =
     `${aiResponse} ${userMessage} ${pageContext}`.toLowerCase();
-
   let selectedImage: MessageImage | null = null;
 
   // Priority 1: Check user's response first for specific outcomes
@@ -426,13 +547,12 @@ function selectBestImage(
       patterns: [
         "contact info",
         "contact information",
-        "contact form",
+        "personal information form",
         "asks for my name",
         "asks for address",
         "contact details",
-        "personal information form",
       ],
-      image: CONTEXTUAL_IMAGES.contact_form,
+      image: CONTEXTUAL_IMAGES.personal_information_form,
     },
     {
       // Patterns for when user is confused about finding username in email (Step 3)
@@ -447,7 +567,6 @@ function selectBestImage(
         "show me",
         "can you show me what the email looks like",
       ],
-      // Only apply this if we're in the username email context AND NOT password reset
       contextRequired: ["username", "check your"],
       contextExclude: ["password", "reset"],
       stepNumber: 3,
@@ -467,7 +586,6 @@ function selectBestImage(
         "password email",
         "can you show me what the email looks like",
       ],
-      // Only apply this if we're in password reset context
       contextRequired: ["password", "reset", "email"],
       stepNumber: 5,
       image: STEP_IMAGES.password_reset_in_progress,
@@ -478,13 +596,11 @@ function selectBestImage(
   for (const patternGroup of userMessagePatterns) {
     for (const pattern of patternGroup.patterns) {
       if (userMessage.toLowerCase().includes(pattern)) {
-        // Check if context is required
         if (patternGroup.contextRequired) {
           const hasRequiredContext = patternGroup.contextRequired.some(req =>
             combinedContext.includes(req)
           );
 
-          // Check if there are excluded contexts
           let hasExcludedContext = false;
           if (patternGroup.contextExclude) {
             hasExcludedContext = patternGroup.contextExclude.some(exclude =>
@@ -492,25 +608,28 @@ function selectBestImage(
             );
           }
 
-          // Check step number if specified
           const stepMatches =
             !patternGroup.stepNumber ||
             context.stepNumber === patternGroup.stepNumber;
 
           if (hasRequiredContext && !hasExcludedContext && stepMatches) {
+            if (!context.displayedImages.includes(patternGroup.image.id)) {
+              selectedImage = patternGroup.image;
+              break;
+            }
+          }
+        } else {
+          if (!context.displayedImages.includes(patternGroup.image.id)) {
             selectedImage = patternGroup.image;
             break;
           }
-        } else {
-          selectedImage = patternGroup.image;
-          break;
         }
       }
     }
     if (selectedImage) break;
   }
 
-  // Priority 2: Direct instruction matching (only if no image selected yet)
+  // Priority 2: Direct instruction matching with strict step controls
   if (!selectedImage) {
     const instructionPatterns = [
       {
@@ -523,6 +642,9 @@ function selectBestImage(
           "try a different email",
           "test a different email",
         ],
+        allowedSteps: [1],
+        excludeSteps: [2, 3, 4, 5, 6],
+        contextRequired: ["email"],
         image: STEP_IMAGES.checking_email_validation,
       },
       {
@@ -532,6 +654,9 @@ function selectBestImage(
           "email is in the system",
           "that's exactly what we wanted",
         ],
+        allowedSteps: [2],
+        excludeSteps: [1, 3, 4, 5, 6],
+        contextRequired: ["validation", "error"],
         image: STEP_IMAGES.email_validated_ready_for_username,
       },
       {
@@ -542,7 +667,10 @@ function selectBestImage(
           "i am an existing user",
           "left side",
         ],
-        excludeSteps: [5, 6], // Don't use this image at steps 5 or 6
+        allowedSteps: [2],
+        excludeSteps: [1, 3, 4, 5, 6],
+        contextRequired: ["username"],
+        contextExclude: ["password", "reset"],
         image: CONTEXTUAL_IMAGES.forgot_username_link,
       },
       {
@@ -553,8 +681,10 @@ function selectBestImage(
           "find your username",
           "looking for the username email",
         ],
-        contextRequired: ["username"],
-        excludeSteps: [5], // Don't use this for step 5
+        allowedSteps: [3],
+        excludeSteps: [1, 2, 4, 5, 6],
+        contextRequired: ["username", "email"],
+        contextExclude: ["password", "reset"],
         image: STEP_IMAGES.username_email_sent,
       },
       {
@@ -567,7 +697,10 @@ function selectBestImage(
           "inside the email",
           "in that email",
         ],
-        excludeSteps: [5],
+        allowedSteps: [3],
+        excludeSteps: [1, 2, 4, 5, 6],
+        contextRequired: ["username", "email"],
+        contextExclude: ["password", "reset"],
         image: STEP_IMAGES.look_for_forgot_username_link_on_email,
       },
       {
@@ -575,13 +708,18 @@ function selectBestImage(
           "forgot password page",
           "enter the username",
           "enter your username",
+          "forgot password",
         ],
-        excludeSteps: [5, 6], // Only for step 4, not 5 or 6
+        allowedSteps: [4],
+        excludeSteps: [1, 2, 3, 5, 6],
+        contextRequired: ["username", "password"],
         image: STEP_IMAGES.ready_for_password_reset,
       },
       {
         patterns: ["check your email", "spam folder", "password reset email"],
-        contextRequired: ["password", "reset"],
+        allowedSteps: [5],
+        excludeSteps: [1, 2, 3, 4, 6],
+        contextRequired: ["password", "reset", "email"],
         stepNumber: 5,
         image: STEP_IMAGES.password_reset_in_progress,
       },
@@ -593,7 +731,9 @@ function selectBestImage(
           "create your new password",
           "click that link",
         ],
-        contextRequired: ["password"],
+        allowedSteps: [5],
+        excludeSteps: [1, 2, 3, 4, 6],
+        contextRequired: ["password", "reset"],
         image: STEP_IMAGES.password_reset_in_progress,
       },
       {
@@ -609,20 +749,34 @@ function selectBestImage(
           "have a great day",
           "you're all set to log in",
         ],
+        allowedSteps: [6],
+        excludeSteps: [1, 2, 3, 4, 5],
+        contextRequired: ["success"],
         image: STEP_IMAGES.process_complete,
       },
       {
         patterns: ["login error", "getting an error", "can't log in"],
+        allowedSteps: [1],
+        excludeSteps: [2, 3, 4, 5, 6],
+        contextRequired: ["error"],
         image: STEP_IMAGES.has_login_error,
       },
     ];
 
-    // Check each pattern group in order
+    // Check each pattern group in order with all validation
     for (const patternGroup of instructionPatterns) {
       // Check if current step is excluded
       if (
         patternGroup.excludeSteps &&
         patternGroup.excludeSteps.includes(context.stepNumber)
+      ) {
+        continue;
+      }
+
+      // Check if current step is in allowed steps (if specified)
+      if (
+        patternGroup.allowedSteps &&
+        !patternGroup.allowedSteps.includes(context.stepNumber)
       ) {
         continue;
       }
@@ -645,11 +799,24 @@ function selectBestImage(
         }
       }
 
+      // Check if excluded context exists
+      if (patternGroup.contextExclude) {
+        const hasExcludedContext = patternGroup.contextExclude.some(exclude =>
+          combinedContext.includes(exclude)
+        );
+        if (hasExcludedContext) {
+          continue;
+        }
+      }
+
       // Check patterns
       for (const pattern of patternGroup.patterns) {
         if (combinedContext.includes(pattern)) {
-          selectedImage = patternGroup.image;
-          break;
+          // Check if image was already displayed before assigning
+          if (!context.displayedImages.includes(patternGroup.image.id)) {
+            selectedImage = patternGroup.image;
+            break;
+          }
         }
       }
       if (selectedImage) break;
@@ -659,7 +826,11 @@ function selectBestImage(
   // Priority 3: Check contextual images (only if no image selected yet)
   if (!selectedImage) {
     for (const image of Object.values(CONTEXTUAL_IMAGES)) {
-      if (image.keywords.some(keyword => combinedContext.includes(keyword))) {
+      if (
+        image.keywords &&
+        image.keywords.some(keyword => combinedContext.includes(keyword)) &&
+        !context.displayedImages.includes(image.id)
+      ) {
         selectedImage = image;
         break;
       }
@@ -669,19 +840,14 @@ function selectBestImage(
   // Priority 4: State-based fallback (only if no image selected yet)
   if (!selectedImage) {
     const stateImage = STEP_IMAGES[context.state as keyof typeof STEP_IMAGES];
-    if (stateImage) {
+    if (stateImage && !context.displayedImages.includes(stateImage.id)) {
       selectedImage = stateImage;
     }
   }
 
-  // Priority 5: Default to initial (only if no image selected yet)
+  // Priority 5: Default to null (only if no image selected yet)
   if (!selectedImage) {
-    selectedImage = STEP_IMAGES.initial;
-  }
-
-  // Check if this image has already been displayed
-  if (selectedImage && context.displayedImages.includes(selectedImage.id)) {
-    return null; // Don't show the image again
+    selectedImage = null; // No image selected, return null
   }
 
   return selectedImage;
@@ -961,12 +1127,12 @@ function analyzeUserState(messages: any[]): ConversationContext {
     }
   }
 
-  // Check for restart scenarios - including contact form appearance
+  // Check for restart scenarios - including personal information form appearance
   if (
     lastFewMessages.includes("start over") ||
     lastFewMessages.includes("try different email") ||
     lastFewMessages.includes("wrong email") ||
-    lastFewMessages.includes("contact form") ||
+    lastFewMessages.includes("personal information form") ||
     lastFewMessages.includes("contact info") ||
     lastFewMessages.includes("contact information") ||
     lastFewMessages.includes("asks for my") ||
@@ -1059,16 +1225,16 @@ ${conversationHistory
   .join("\n")}
 
 RULES FOR GENERATING OPTIONS:
-1. Generate 2-3 SHORT, NATURAL user responses (5-30 words max)
+1. Generate 2-3 SHORT, NATURAL user responses
 2. Write from the user's perspective only
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
-5. Always include a "Let me try a different email" option when stuck on email-related steps
+5. Include a "Let me try a different email" option if user is stuck on email-related steps
 6. If user sentiment is frustrated or consecutive negatives >= 3, include a "I need help" option
-8. Always have a positive outcome option like "I did it. What's next in the step?" if the AI is asking about checking email or finding something
+8. Always have a positive acknowledging option like "I did it. What's the next step?" if the AI is asking about checking email or finding something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
-10. When steps are skipped, generate one option for the previous step like "Hold on, I got [previous step] previously"
-11. Have a "We can stop here" option if the user's initial question has been answered 
+10. When steps are skipped, generate one option for the previous step like "Hold on, we're moving too fast. Can you go back to [previous step]?"
+11. Have a "We can stop here" option if the user's initial question has been answered
 
 RESPONSE PATTERNS BY QUESTION TYPE:
 - "What happens when...?" → What the user sees/experiences
@@ -1078,7 +1244,7 @@ RESPONSE PATTERNS BY QUESTION TYPE:
 - "How did that go?" → Success/failure outcomes
 
 CONTEXT-SPECIFIC OPTIONS:
-- Step 1 (Email validation): Focus on validation error vs contact form
+- Step 1 (Email validation): Focus on validation error (red) vs personal information form
 - Step 2-3 (Username): Focus on email receipt and spam checking
 - Step 4-5 (Password): Focus on reset link and completion
 - Any step with issues: Include "Try different email?" option
@@ -1139,8 +1305,8 @@ Generate ONLY the JSON, no explanations.`;
           .slice(0, 4)
           .map((opt: any) => ({
             ...opt,
-            text: opt.text.substring(0, 50),
-            action: opt.text.substring(0, 50), // Ensure they match
+            text: opt.text,
+            action: opt.text, // Ensure they match
           }));
 
         // Add intelligence: if no "different email" option exists and user might be stuck
@@ -1219,8 +1385,8 @@ function getIntelligentFallbackOptions(
           },
           {
             id: "fail",
-            text: "Shows contact form",
-            action: "Shows contact form",
+            text: "Shows personal information form",
+            action: "Shows personal information form",
             color: "bg-red-50 border-red-200 hover:border-red-400",
           },
           {
@@ -1373,7 +1539,7 @@ export async function POST(req: Request) {
         ) {
           pageContext =
             "I see the contact information form - this means your email isn't in the system yet. ";
-          // Force state to restart_needed when contact form is detected
+          // Force state to restart_needed when personal information form is detected
           conversationContext.state = "restart_needed";
         }
       } else {
@@ -1385,7 +1551,7 @@ export async function POST(req: Request) {
     const systemPrompt = `You are an expert UHCC portal support specialist. You're helping students recover their login credentials with warmth, patience, and expertise.
 
 CORE BEHAVIOR PRINCIPLES:
-- Move at a slow, steady pace. Do not skip steps and make sure to be thorough in Steps 1, 3 and 5. Do not miss the inbox/spam checking, and even displaying what the email looks like. Do not miss the validation error in Step 1.
+- Move at a slow, steady pace. Do not skip steps and make sure to be thorough in Steps 1, 3 and 5. Do not miss the inbox/spam checking, and even displaying what the email looks like. Do not miss the validation error (red) in Step 1.
 - Always ask for confirmation before moving to the next step
 - Be conversational and encouraging - talk like you're helping a friend
 - Keep responses focused and brief (2-3 sentences max) 
@@ -1397,16 +1563,24 @@ CORE BEHAVIOR PRINCIPLES:
 - Never say "I'm a text-based assistant, I don't have the ability to show you images".
 
 CRITICAL CONTACT FORM RECOGNITION:
-- If user mentions "contact form", "contact info", "contact information", "asks for my name/address", or similar:
+- If user mentions "personal informatio form", "personal informatio info", "contact information", "asks for my name/address", or similar:
   - This means their email is NOT in the system
   - IMMEDIATELY acknowledge this and suggest trying a different email
-  - Show empathy: "I see the contact form appeared - that means this email isn't in the system yet."
+  - Show empathy: "I see the personal information form appeared - that means this email isn't in the system yet."
   - Guide them back to Step 1 with a different email
+
+STEP 1 USERNAME VALIDATION:
+- When user is validating email (Step 1), ALWAYS check for:
+  - "validation error", "invalid email", "personal information form", "contact information"
+  - RESPOND: "I see the validation error - that means this email is in the system. You can now proceed to Step 2: Reset your username."
+  - If they see the personal information form appear:
+    - RESPOND: "I see the personal information form appeared - that means this email isn't in the system yet."
+    - Guide them back to Step 1 with a different email.
 
 STEP 3 USERNAME EMAIL HANDLING:
 - When user is checking email for username (Step 3), watch for confusion indicators:
   - "Where is it?", "What does it look like?", "Can't find it", "Don't see it", "Show me"
-  - RESPOND: "In the email from UHCC, look for a link that says 'Forgot Username' - click that link to see your username. The username itself might be in the email or revealed after clicking the link."
+  - RESPOND: "In the email from UHCC, look for a section that says 'Here is your username'. You will use this username to reset your password."
   - This helps them understand they need to look INSIDE the email for a link
 
 STEP 5 PASSWORD RESET EMAIL HANDLING:
@@ -1435,8 +1609,8 @@ ${pageContext ? `- Page Context: ${pageContext}` : ""}
 THE 6-STEP UHCC PORTAL RESET PROCESS:
 1. Email Validation: "I am a new user" section (RIGHT side) → validation error = GOOD (email exists)
 2. Username Reset: "I am an existing user" section (LEFT side) → Forgot Username → email sent
-3. Get Username: Check email/spam → find username from UHCC (may need to click link in email)
-4. Password Reset: Forgot Password page → enter username → reset email sent
+3. Get Username: Check email/spam → find username from UHCC email → use username to reset password
+4. Password Reset: Forgot Password page → enter valid username → reset email sent
 5. Reset Password: Check email/spam → click reset link → create new password
 6. Login Success: LEFT side with username + new password
 
@@ -1446,14 +1620,11 @@ CRITICAL UNDERSTANDING:
 - Users often use wrong email - always offer to try different emails
 - Emails often go to spam - always remind to check spam folder
 - Some users get stuck in loops - recognize patterns and suggest restart
-- At Step 3, users may need to click a link INSIDE the email to see their username
 
 SPECIFIC RESPONSES FOR COMMON SCENARIOS:
-- User says "contact form appeared" → "I see the contact form - that means this email isn't in the system. Let's try a different email address you might have used when registering."
-- User says "asks for my information" → "That contact form means your email isn't registered yet. What other email addresses might you have used?"
-- User says "contact info page" → "The contact information form appearing tells us this email isn't in their system. Let's go back and test a different email."
-- User at Step 3 says "where is it?" → "Look inside the email from UHCC for a link that says 'Forgot Username' - click that link to see your username."
-- User at Step 3 says "can't find username" → "The username might be in the email itself, or you might need to click the 'Forgot Username' link in the email to see it."
+- User says "personal information form appeared" → "I see the personal information form - that means this email isn't in the system. Let's try a different email address you might have used when registering."
+- User says "asks for my information" → "That personal information form means your email isn't registered yet. What other email addresses might you have used?"
+- User at Step 3 says "where is it?" → "Look inside the email from UHCC for a section that says 'Here is your username' - you will use this username to reset your password."
 - User at Step 5 says "where is it?" → "Check your email for the password reset email from UHCC - it will have a link to reset your password. Click that link to set your new password."
 - User at Step 5 says "can't find reset email" → "The password reset email should be from UHCC. Check your spam folder too. The email will contain a link to reset your password."
 
@@ -1504,7 +1675,7 @@ Remember: You're an expert who cares about helping students succeed. Be warm, pa
     const finalResponse = aiResponse || stateResponse.message;
 
     // Select the best image based on full context
-    const selectedImage = selectBestImage(
+    const selectedImage = await selectBestImage(
       conversationContext,
       finalResponse,
       message,

@@ -12,14 +12,14 @@ const redis = new Redis({
 // More lenient rate limiting for a support chat application
 const rateLimit = new Ratelimit({
   redis: redis,
-  limiter: Ratelimit.slidingWindow(30, "60 s"), // 30 requests per minute (very generous)
+  limiter: Ratelimit.slidingWindow(50, "60 s"), // 50 requests per minute (very generous)
   analytics: true,
 });
 
 // Even more lenient for API calls specifically
 const apiRateLimit = new Ratelimit({
   redis: redis,
-  limiter: Ratelimit.slidingWindow(20, "60 s"), // 20 API calls per minute
+  limiter: Ratelimit.slidingWindow(50, "60 s"), // 50 API calls per minute
   analytics: true,
 });
 
