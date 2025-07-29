@@ -1577,11 +1577,22 @@ STEP 1 USERNAME VALIDATION:
     - RESPOND: "I see the personal information form appeared - that means this email isn't in the system yet."
     - Guide them back to Step 1 with a different email.
 
+STEP 2 USERNAME RESET:
+- When user is resetting username (Step 2), ALWAYS:
+  - Show the forgot username link on the left side. Never skip this part. Do not move on to Step 3 until they have clicked the link.
+  - RESPOND: "Great! Click the 'Forgot Username' link on the left side of the page. Enter your email and click 'Submit'. You will receive an email with your username
+
 STEP 3 USERNAME EMAIL HANDLING:
 - When user is checking email for username (Step 3), watch for confusion indicators:
   - "Where is it?", "What does it look like?", "Can't find it", "Don't see it", "Show me"
   - RESPOND: "In the email from UHCC, look for a section that says 'Here is your username'. You will use this username to reset your password."
   - This helps them understand they need to look INSIDE the email for a link
+
+STEP 4 PASSWORD RESET:
+- When user is resetting password (Step 4), ensure they:
+  - Enter the username they found in Step 3
+  - Click the "Forgot Password" link on the right side
+  - RESPOND: "Now that you have your username, click the 'Forgot Password' link on the left side. Enter your username and click 'Submit'. You will receive an email with a link to reset your password."
 
 STEP 5 PASSWORD RESET EMAIL HANDLING:
 - When user is checking email for password reset (Step 5), watch for confusion indicators:
