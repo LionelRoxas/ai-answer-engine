@@ -220,13 +220,13 @@ const STEP_IMAGES = {
 
 // Additional context-specific images
 const CONTEXTUAL_IMAGES = {
-  personal_information_form: {
-    id: "personal_information_form_error",
+  student_profile_form: {
+    id: "student_profile_form_error",
     src: "/images/steps/contact-form-error.png",
     alt: "Contact form appears",
     caption:
-      "If you see this personal information form, your email is NOT in the system - try a different email",
-    keywords: ["personal information form", "email not found", "wrong email"],
+      "If you see this student profile form, your email is NOT in the system - try a different email",
+    keywords: ["student profile form", "email not found", "wrong email"],
   },
   spam_folder: {
     id: "spam_folder_check",
@@ -373,7 +373,7 @@ Sometimes the email you think you used isn't the one in the system. Let's go bac
 Go to the <a href="https://ce.uhcc.hawaii.edu/portal/logon.do?method=load" target="_blank">portal login page</a> and use the "I am a new user" section on the RIGHT SIDE to test a different email address.
 
 What other email addresses might you have used when you first registered?`,
-        image: CONTEXTUAL_IMAGES.personal_information_form,
+        image: CONTEXTUAL_IMAGES.student_profile_form,
       };
 
     case "process_complete":
@@ -438,7 +438,7 @@ STEP IMAGES:
 - "contact_support": Support information - use when escalating to human help
 
 CONTEXTUAL IMAGES:
-- "personal_information_form_error": Contact form appears - use when email is NOT in system
+- "student_profile_form_error": Contact form appears - use when email is NOT in system
 - "spam_folder_check": Spam folder reminder - use when user can't find emails
 - "forgot_username_location": Username link location - use when directing to LEFT side username link
 
@@ -447,7 +447,7 @@ CRITICAL RULES:
 2. Match the image to the SPECIFIC step and context
 3. For Step 3: Use "forgot_username_link" when user is confused about what's IN the email
 4. For Step 5: Use "password_reset_email" when user is confused about what's IN the email
-5. Use "personal_information_form_error" when user mentions personal information form/info appearing
+5. Use "student_profile_form_error" when user mentions student profile form/info appearing
 6. Use "validation_error_good" when celebrating the validation error success
 7. Use "new_user_section" when directing to Step 1 email validation
 8. Use "contact_support" when user is frustrated or stuck
@@ -455,7 +455,7 @@ CRITICAL RULES:
 10. If no image is appropriate or would be helpful, return "none"
 
 STEP-SPECIFIC GUIDANCE:
-- Step 1: Show validation process ("new_user_section") or personal information form error
+- Step 1: Show validation process ("new_user_section") or student profile form error
 - Step 2: Show validation success ("validation_error_good") or username link location
 - Step 3: Show email checking ("check_email") or email content ("forgot_username_link")
 - Step 4: Show password reset form ("forgot_password_page")
@@ -547,12 +547,12 @@ function getOriginalImageSelection(
       patterns: [
         "contact info",
         "contact information",
-        "personal information form",
+        "student profile form",
         "asks for my name",
         "asks for address",
         "contact details",
       ],
-      image: CONTEXTUAL_IMAGES.personal_information_form,
+      image: CONTEXTUAL_IMAGES.student_profile_form,
     },
     {
       // Patterns for when user is confused about finding username in email (Step 3)
@@ -1127,12 +1127,12 @@ function analyzeUserState(messages: any[]): ConversationContext {
     }
   }
 
-  // Check for restart scenarios - including personal information form appearance
+  // Check for restart scenarios - including student profile form appearance
   if (
     lastFewMessages.includes("start over") ||
     lastFewMessages.includes("try different email") ||
     lastFewMessages.includes("wrong email") ||
-    lastFewMessages.includes("personal information form") ||
+    lastFewMessages.includes("student profile form") ||
     lastFewMessages.includes("contact info") ||
     lastFewMessages.includes("contact information") ||
     lastFewMessages.includes("asks for my") ||
@@ -1229,7 +1229,6 @@ RULES FOR GENERATING OPTIONS:
 2. Write from the user's perspective only
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
-5. Include a "Let me try a different email" option if user is stuck on email-related steps
 6. If user sentiment is frustrated or consecutive negatives >= 3, include a "I need help" option
 8. Always have a positive acknowledging option like "I did it. What's the next step?" if the AI is asking about checking email or finding something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
@@ -1244,7 +1243,7 @@ RESPONSE PATTERNS BY QUESTION TYPE:
 - "How did that go?" → Success/failure outcomes
 
 CONTEXT-SPECIFIC OPTIONS:
-- Step 1 (Email validation): Focus on validation error (red) vs personal information form
+- Step 1 (Email validation): Focus on validation error (red) vs student profile form
 - Step 2-3 (Username): Focus on email receipt and spam checking
 - Step 4-5 (Password): Focus on reset link and completion
 - Any step with issues: Include "Try different email?" option
@@ -1385,8 +1384,8 @@ function getIntelligentFallbackOptions(
           },
           {
             id: "fail",
-            text: "Shows personal information form",
-            action: "Shows personal information form",
+            text: "Shows student profile form",
+            action: "Shows student profile form",
             color: "bg-red-50 border-red-200 hover:border-red-400",
           },
           {
@@ -1539,7 +1538,7 @@ export async function POST(req: Request) {
         ) {
           pageContext =
             "I see the contact information form - this means your email isn't in the system yet. ";
-          // Force state to restart_needed when personal information form is detected
+          // Force state to restart_needed when student profile form is detected
           conversationContext.state = "restart_needed";
         }
       } else {
@@ -1566,15 +1565,15 @@ CRITICAL CONTACT FORM RECOGNITION:
 - If user mentions "personal informatio form", "personal informatio info", "contact information", "asks for my name/address", or similar:
   - This means their email is NOT in the system
   - IMMEDIATELY acknowledge this and suggest trying a different email
-  - Show empathy: "I see the personal information form appeared - that means this email isn't in the system yet."
+  - Show empathy: "I see the student profile form appeared - that means this email isn't in the system yet."
   - Guide them back to Step 1 with a different email
 
 STEP 1 USERNAME VALIDATION:
 - When user is validating email (Step 1), ALWAYS check for:
-  - "validation error", "invalid email", "personal information form", "contact information"
+  - "validation error", "invalid email", "student profile form", "contact information"
   - RESPOND: "I see the validation error - that means this email is in the system. You can now proceed to Step 2: Reset your username."
-  - If they see the personal information form appear:
-    - RESPOND: "I see the personal information form appeared - that means this email isn't in the system yet."
+  - If they see the student profile form appear:
+    - RESPOND: "I see the student profile form appeared - that means this email isn't in the system yet."
     - Guide them back to Step 1 with a different email.
 
 STEP 2 USERNAME RESET:
@@ -1633,8 +1632,8 @@ CRITICAL UNDERSTANDING:
 - Some users get stuck in loops - recognize patterns and suggest restart
 
 SPECIFIC RESPONSES FOR COMMON SCENARIOS:
-- User says "personal information form appeared" → "I see the personal information form - that means this email isn't in the system. Let's try a different email address you might have used when registering."
-- User says "asks for my information" → "That personal information form means your email isn't registered yet. What other email addresses might you have used?"
+- User says "student profile form appeared" → "I see the student profile form - that means this email isn't in the system. Let's try a different email address you might have used when registering."
+- User says "asks for my information" → "That student profile form means your email isn't registered yet. What other email addresses might you have used?"
 - User at Step 3 says "where is it?" → "Look inside the email from UHCC for a section that says 'Here is your username' - you will use this username to reset your password."
 - User at Step 5 says "where is it?" → "Check your email for the password reset email from UHCC - it will have a link to reset your password. Click that link to set your new password."
 - User at Step 5 says "can't find reset email" → "The password reset email should be from UHCC. Check your spam folder too. The email will contain a link to reset your password."

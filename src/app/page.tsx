@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import React from "react";
 import {
   PlusIcon,
@@ -87,6 +87,10 @@ export default function UHCCPortalSupport() {
   const [countdownTime, setCountdownTime] = useState<number | null>(null);
   const [totalWaitTime, setTotalWaitTime] = useState<number>(60); // Track total wait time for progress bar
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Add these new state variables
+  const [showAutoSurvey, setShowAutoSurvey] = useState(false);
+  const [surveyTriggered, setSurveyTriggered] = useState(false);
 
   const [rateLimitInfo, setRateLimitInfo] = useState<{
     remaining?: number;
@@ -249,9 +253,17 @@ export default function UHCCPortalSupport() {
     setChats(prev => [newChat, ...prev]);
     setCurrentChat(newChat);
     setShowChat(false);
-    setSidebarOpen(window.innerWidth >= 768); // Open on desktop, closed on mobile
+    setSidebarOpen(window.innerWidth >= 768);
     setMessagesSent(0);
     setLatestOptionsMessageIndex(null);
+
+    // Reset survey states
+    setShowAutoSurvey(false);
+    setSurveyTriggered(false);
+  };
+
+  const handleSurveyClose = () => {
+    setShowAutoSurvey(false);
   };
 
   const handleQuickAction = (action: QuickAction) => {
@@ -638,13 +650,51 @@ export default function UHCCPortalSupport() {
     return messageElements;
   };
 
-  const isConversationComplete = currentChat.messages.some(
-    msg =>
-      msg.role === "assistant" &&
-      (msg.content.includes("📞") ||
-        msg.content.includes("808-842-2563") ||
-        msg.content.includes("SUCCESS!"))
-  );
+  // Add this new success detection logic
+  const isConversationComplete = useMemo(() => {
+    const lastMessage = currentChat.messages[currentChat.messages.length - 1];
+
+    if (!lastMessage || lastMessage.role !== "assistant") return false;
+
+    // Check for success completion by image ID (most reliable)
+    const recentMessages = currentChat.messages.slice(-3);
+    const hasSuccessImage = recentMessages.some(
+      msg => msg.role === "assistant" && msg.image?.id === "login_success"
+    );
+
+    // Check for support escalation using original text detection
+    const hasContactInfo =
+      lastMessage.content.includes("📞") ||
+      lastMessage.content.includes("808-842-2563") ||
+      lastMessage.content.includes("uhcccewd@hawaii.edu") ||
+      lastMessage.content.includes("contact:") ||
+      lastMessage.content.includes("Call support now") ||
+      currentChat.messages.some(
+        msg =>
+          msg.role === "assistant" &&
+          (msg.content.includes("Call support now") ||
+            msg.content.includes("📞 808-842-2563"))
+      );
+
+    return hasSuccessImage || hasContactInfo;
+  }, [currentChat.messages]);
+
+  // Add this survey trigger effect
+  useEffect(() => {
+    if (
+      isConversationComplete &&
+      !surveyTriggered &&
+      currentChat.messages.length > 2
+    ) {
+      // Add a small delay so user can read the final message
+      const timer = setTimeout(() => {
+        setShowAutoSurvey(true);
+        setSurveyTriggered(true);
+      }, 2000); // 2 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [isConversationComplete, surveyTriggered, currentChat.messages.length]);
 
   // Campus names for footer
   const campusNames = [
@@ -814,7 +864,11 @@ export default function UHCCPortalSupport() {
               </div>
             </div>
           )}
-          <FloatingRating show={showChat && currentChat.messages.length > 10} />
+          <FloatingRating
+            show={showChat && currentChat.messages.length > 10}
+            autoOpen={showAutoSurvey}
+            onClose={handleSurveyClose}
+          />
 
           {/* Chat History */}
           <div className="flex-1 overflow-y-auto">
@@ -1086,9 +1140,9 @@ export default function UHCCPortalSupport() {
                             {formatMessage(msg.content, msg.image)}
                           </div>
                           {/* Speaker button positioned in bottom-right */}
-                            <div className="absolute bottom-3 right-4">
+                          <div className="absolute bottom-3 right-4">
                             <TextToSpeech text={msg.content} />
-                            </div>
+                          </div>
                         </>
                       ) : (
                         <div className="whitespace-pre-wrap text-sm md:text-base">

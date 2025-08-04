@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { StarIcon, XIcon, CheckCircleIcon } from "lucide-react";
 
 interface ApiResponse {
@@ -12,9 +12,15 @@ interface ApiResponse {
 
 interface SidebarRatingProps {
   show?: boolean;
+  autoOpen?: boolean; // New prop to auto-open modal
+  onClose?: () => void; // Callback when modal is closed
 }
 
-export default function SidebarRating({ show = true }: SidebarRatingProps) {
+export default function SidebarRating({
+  show = true,
+  autoOpen = false,
+  onClose,
+}: SidebarRatingProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rating, setRating] = useState<number>(0);
   const [feedback, setFeedback] = useState<string>("");
@@ -22,6 +28,13 @@ export default function SidebarRating({ show = true }: SidebarRatingProps) {
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hoverRating, setHoverRating] = useState<number>(0);
+
+  // Auto-open modal when autoOpen prop changes to true
+  useEffect(() => {
+    if (autoOpen && !submitted && !isModalOpen) {
+      setIsModalOpen(true);
+    }
+  }, [autoOpen, submitted, isModalOpen]);
 
   // Don't render if show is false or already submitted
   if (!show || submitted) return null;
@@ -64,6 +77,10 @@ export default function SidebarRating({ show = true }: SidebarRatingProps) {
         setIsModalOpen(false);
         setRating(0);
         setFeedback("");
+        // Call onClose callback if provided
+        if (onClose) {
+          onClose();
+        }
       } else {
         setError(result.error || "Failed to submit survey");
       }
@@ -78,6 +95,10 @@ export default function SidebarRating({ show = true }: SidebarRatingProps) {
   const closeModal = () => {
     setIsModalOpen(false);
     setError(null);
+    // Call onClose callback if provided
+    if (onClose) {
+      onClose();
+    }
   };
 
   return (
