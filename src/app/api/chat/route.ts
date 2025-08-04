@@ -212,7 +212,7 @@ const STEP_IMAGES = {
     id: "contact_support",
     src: "/images/steps/portal-login-page.png",
     alt: "Contact Support",
-    caption: "Contact support for personalized assistance",
+    caption: "You're on this login page right? Let me help you start again.",
     keywords: ["support", "help", "contact"],
     stepNumber: 0,
   },

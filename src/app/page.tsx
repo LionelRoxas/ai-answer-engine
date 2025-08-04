@@ -16,6 +16,7 @@ import {
   XIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ZoomInIcon,
 } from "lucide-react";
 
 type MessageImage = {
@@ -90,6 +91,8 @@ export default function UHCCPortalSupport() {
     reset?: number;
   }>({});
 
+  const [enlargedImage, setEnlargedImage] = useState<MessageImage | null>(null);
+
   // Scroll to bottom function
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -128,6 +131,17 @@ export default function UHCCPortalSupport() {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && enlargedImage) {
+        setEnlargedImage(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscKey);
+    return () => document.removeEventListener("keydown", handleEscKey);
+  }, [enlargedImage]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -579,17 +593,18 @@ export default function UHCCPortalSupport() {
     if (image) {
       messageElements.push(
         <div key="image" className="mt-4">
-          <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm max-w-full md:max-w-md">
+          <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm w-fit relative group">
             <img
               src={image.src}
               alt={image.alt}
-              className="w-full h-auto"
+              className="w-full h-auto cursor-pointer"
               style={{
                 width: image.width || "auto",
                 height: image.height || "auto",
-                maxHeight: "200px",
+                maxHeight: "250px",
                 objectFit: "contain",
               }}
+              onClick={() => setEnlargedImage(image)}
               onError={e => {
                 const container = e.currentTarget.closest(".border");
                 if (container) {
@@ -597,6 +612,14 @@ export default function UHCCPortalSupport() {
                 }
               }}
             />
+            {/* Zoom button */}
+            <button
+              onClick={() => setEnlargedImage(image)}
+              className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
+              title="Enlarge image"
+            >
+              <ZoomInIcon size={16} />
+            </button>
             {image.caption && (
               <div className="p-2 bg-amber-50 border-t border-amber-200">
                 <p className="text-xs text-amber-800 font-medium">
@@ -669,6 +692,47 @@ export default function UHCCPortalSupport() {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
+      {/* Image Enlargement Modal */}
+      {enlargedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
+          onClick={() => setEnlargedImage(null)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[90vh] bg-white rounded-lg overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setEnlargedImage(null)}
+              className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white p-2 rounded-full z-10 transition-colors"
+              title="Close (ESC)"
+            >
+              <XIcon size={20} />
+            </button>
+
+            {/* Enlarged image */}
+            <img
+              src={enlargedImage.src}
+              alt={enlargedImage.alt}
+              className="max-w-full max-h-full object-contain"
+              style={{
+                width: enlargedImage.width || "auto",
+                height: enlargedImage.height || "auto",
+              }}
+            />
+
+            {/* Caption */}
+            {enlargedImage.caption && (
+              <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-3">
+                <p className="text-sm font-medium text-center">
+                  {enlargedImage.caption}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
