@@ -669,6 +669,7 @@ export default function UHCCPortalSupport() {
       lastMessage.content.includes("uhcccewd@hawaii.edu") ||
       lastMessage.content.includes("contact:") ||
       lastMessage.content.includes("Call support now") ||
+      lastMessage.content.includes("Have a great day") ||
       currentChat.messages.some(
         msg =>
           msg.role === "assistant" &&

@@ -56,7 +56,7 @@ const UHCC_PORTAL_KNOWLEDGE = {
       action:
         "Go to 'I am an existing user' on LEFT side and click Forgot Username link to enter the SAME validated email",
       goal: "Request username to be sent to your email",
-      success_indicator: "System confirms username reset email was sent",
+      success_indicator: "System confirms find username email was sent",
       prerequisite: "Must have validated email from Step 1",
     },
     step3: {
@@ -178,7 +178,7 @@ const STEP_IMAGES = {
     src: "/images/steps/forgot-username-link.PNG",
     alt: "Forgot Username link",
     caption:
-      "This is what the reset username email looks like. Look for the 'Your user name is' section inside that email.",
+      "This is what the find username email looks like. Look for the 'Your user name is' section inside that email.",
     keywords: ["forgot username", "email", "link"],
     stepNumber: 3,
   },
@@ -187,7 +187,7 @@ const STEP_IMAGES = {
     src: "/images/steps/forgot-password-page.PNG",
     alt: "Forgot Password page",
     caption:
-      "Click this link, then enter your username to get password reset link",
+      "Click the 'Forgot Password' link, then enter your username to get password reset link",
     keywords: ["forgot password", "username", "password reset"],
     stepNumber: 4,
   },
@@ -1230,7 +1230,7 @@ RULES FOR GENERATING OPTIONS:
 3. Match the specific context of where the user is in the 6-step process
 4. Include realistic outcomes based on the portal's actual behavior
 6. If user sentiment is frustrated or consecutive negatives >= 3, include a "I need help" option
-8. Always have a positive acknowledging option like "I did it. What's the next step?" if the AI is asking about checking email or finding something
+8. Always have a positive acknowledging option like "I did it. Continue guiding me slowly." if the AI is asking about checking email or finding something
 9. Only for Steps 3 and 5, when the AI says to check email, include a "Can you show me what the email looks like?" option
 10. When steps are skipped, generate one option for the previous step like "Hold on, we're moving too fast. Can you go back to [previous step]?"
 11. Have a "We can stop here" option if the user's initial question has been answered
@@ -1246,7 +1246,6 @@ CONTEXT-SPECIFIC OPTIONS:
 - Step 1 (Email validation): Focus on validation error (red) vs student profile form
 - Step 2-3 (Username): Focus on email receipt and spam checking
 - Step 4-5 (Password): Focus on reset link and completion
-- Any step with issues: Include "Try different email?" option
 
 FORMAT AS JSON:
 {
@@ -1571,13 +1570,13 @@ CRITICAL CONTACT FORM RECOGNITION:
 STEP 1 USERNAME VALIDATION:
 - When user is validating email (Step 1), ALWAYS check for:
   - "validation error", "invalid email", "student profile form", "contact information"
-  - RESPOND: "I see the validation error - that means this email is in the system. You can now proceed to Step 2: Reset your username."
+  - RESPOND: "I see the validation error - that means this email is in the system. You can now proceed to Step 2."
   - If they see the student profile form appear:
     - RESPOND: "I see the student profile form appeared - that means this email isn't in the system yet."
     - Guide them back to Step 1 with a different email.
 
 STEP 2 USERNAME RESET:
-- When user is resetting username (Step 2), ALWAYS:
+- When user is finding username (Step 2), ALWAYS:
   - Show the forgot username link on the left side. Never skip this part. Do not move on to Step 3 until they have clicked the link.
   - RESPOND: "Great! Click the 'Forgot Username' link on the left side of the page. Enter your email and click 'Submit'. You will receive an email with your username
 
