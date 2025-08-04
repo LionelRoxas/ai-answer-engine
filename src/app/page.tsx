@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
@@ -18,6 +19,8 @@ import {
   ChevronRightIcon,
   ZoomInIcon,
 } from "lucide-react";
+import FloatingRating from "./components/FloatingRating";
+import TextToSpeech from "./components/TextToSpeech";
 
 type MessageImage = {
   id: string;
@@ -811,6 +814,7 @@ export default function UHCCPortalSupport() {
               </div>
             </div>
           )}
+          <FloatingRating show={showChat && currentChat.messages.length > 10} />
 
           {/* Chat History */}
           <div className="flex-1 overflow-y-auto">
@@ -840,7 +844,6 @@ export default function UHCCPortalSupport() {
           </div>
         </div>
       )}
-
       {/* Main Content */}
       <div
         className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
@@ -1071,16 +1074,22 @@ export default function UHCCPortalSupport() {
                       </div>
                     )}
                     <div
-                      className={`max-w-[85%] md:max-w-[80%] p-3 md:p-4 rounded-lg ${
+                      className={`max-w-[85%] md:max-w-[80%] p-3 md:p-4 rounded-lg relative ${
                         msg.role === "assistant"
                           ? "bg-white border border-amber-200 shadow-sm text-gray-900"
                           : "bg-amber-600 text-white"
                       }`}
                     >
                       {msg.role === "assistant" ? (
-                        <div className="prose prose-sm max-w-none">
-                          {formatMessage(msg.content, msg.image)}
-                        </div>
+                        <>
+                          <div className="prose prose-sm max-w-none pr-10">
+                            {formatMessage(msg.content, msg.image)}
+                          </div>
+                          {/* Speaker button positioned in bottom-right */}
+                            <div className="absolute bottom-3 right-4">
+                            <TextToSpeech text={msg.content} />
+                            </div>
+                        </>
                       ) : (
                         <div className="whitespace-pre-wrap text-sm md:text-base">
                           {msg.content}
