@@ -22,7 +22,7 @@ export default function TextToSpeech({
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   // ElevenLabs configuration
-  const ELEVENLABS_API_KEY = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY;
+  const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
   const VOICE_ID = "uYXf8XasLslADfZ2MB4u"; // Your specified voice ID
   const ELEVENLABS_URL = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`;
 
