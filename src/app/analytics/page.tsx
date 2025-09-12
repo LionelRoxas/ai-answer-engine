@@ -283,65 +283,68 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Summary Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
-                {/* Total Sessions Card */}
-                <div className="bg-white border-2 rounded-xl p-4 md:p-6 transition-all duration-200 bg-blue-50 border-blue-300 hover:border-blue-500 shadow-sm hover:shadow-xl">
-                  <div className="flex items-start gap-3">
-                    <Activity className="text-blue-600 mt-1" size={20} />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-blue-600 text-sm mb-1">
-                        Total Sessions
-                      </h4>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {data?.summary?.totalSessions ?? 0}
-                      </p>
-                      <p className="text-blue-600/80 text-xs mt-1">
-                        {data?.summary?.uniqueSessions ?? 0} unique
-                      </p>
+                {/* Summary Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10">
+                  {/* Total Sessions Card */}
+                  <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 hover:border-blue-400 shadow-lg hover:shadow-xl hover:scale-105 group">
+                    <div className="flex items-start gap-4">
+                      <div className="bg-blue-100 p-3 rounded-lg group-hover:bg-blue-200 transition-colors">
+                        <Activity className="text-blue-600" size={24} />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-blue-700 text-sm mb-2 uppercase tracking-wide">
+                          Total Sessions
+                        </h4>
+                        <p className="text-3xl md:text-4xl font-bold text-blue-600 leading-none mb-1">
+                          {data?.summary?.totalSessions ?? 0}
+                        </p>
+                        <p className="text-blue-500/70 text-xs">
+                          Active user sessions
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Messages Exchanged Card */}
-                <div className="bg-white border-2 rounded-xl p-4 md:p-6 transition-all duration-200 bg-green-50 border-green-300 hover:border-green-500 shadow-sm hover:shadow-xl">
-                  <div className="flex items-start gap-3">
-                    <MessageSquare className="text-green-600 mt-1" size={20} />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-green-600 text-sm mb-1">
-                        Messages Exchanged
-                      </h4>
-                      <p className="text-2xl font-bold text-green-600">
-                        {data?.summary?.totalMessages ?? 0}
-                      </p>
-                      <p className="text-green-600/80 text-xs mt-1">
-                        {data?.summary?.avgMessagesPerSession?.toFixed(1) ??
-                          "0.0"}{" "}
-                        per session
-                      </p>
+                  {/* Messages Exchanged Card */}
+                  <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-green-50 to-green-100/50 border-green-200 hover:border-green-400 shadow-lg hover:shadow-xl hover:scale-105 group">
+                    <div className="flex items-start gap-4">
+                      <div className="bg-green-100 p-3 rounded-lg group-hover:bg-green-200 transition-colors">
+                        <MessageSquare className="text-green-600" size={24} />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-green-700 text-sm mb-2 uppercase tracking-wide">
+                          Messages Exchanged
+                        </h4>
+                        <p className="text-3xl md:text-4xl font-bold text-green-600 leading-none mb-1">
+                          {data?.summary?.totalMessages ?? 0}
+                        </p>
+                        <p className="text-green-500/70 text-xs">
+                          {data?.summary?.avgMessagesPerSession?.toFixed(1) ?? "0.0"} per session
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Completed Sessions Card */}
-                <div className="bg-white border-2 rounded-xl p-4 md:p-6 transition-all duration-200 bg-amber-50 border-amber-300 hover:border-amber-500 shadow-sm hover:shadow-xl">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle className="text-amber-600 mt-1" size={20} />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-amber-600 text-sm mb-1">
-                        Completed Sessions
-                      </h4>
-                      <p className="text-2xl font-bold text-amber-600">
-                        {data?.summary?.completedSessions ?? 0}
-                      </p>
-                      <p className="text-amber-600/80 text-xs mt-1">
-                        {data?.summary?.completionRate?.toFixed(1) ?? "0.0"}%
-                        rate
-                      </p>
+                  {/* Completed Sessions Card */}
+                  <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200 hover:border-amber-400 shadow-lg hover:shadow-xl hover:scale-105 group">
+                    <div className="flex items-start gap-4">
+                      <div className="bg-amber-100 p-3 rounded-lg group-hover:bg-amber-200 transition-colors">
+                        <CheckCircle className="text-amber-600" size={24} />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-amber-700 text-sm mb-2 uppercase tracking-wide">
+                          Completed Sessions
+                        </h4>
+                        <p className="text-3xl md:text-4xl font-bold text-amber-600 leading-none mb-1">
+                          {data?.summary?.completedSessions ?? 0}
+                        </p>
+                        <p className="text-amber-500/70 text-xs">
+                          {data?.summary?.completionRate?.toFixed(1) ?? "0.0"}% rate
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
               {/* Quick Actions Usage */}
               {data?.quickActions &&

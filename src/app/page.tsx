@@ -213,8 +213,6 @@ export default function UHCCPortalSupport() {
 
   useEffect(() => {
     if (currentChat.messages.length === 0) {
-      // Initialize analytics for new session
-      analyticsTracker.initSession(currentChat.id);
       loadChatHistory(currentChat.id);
     }
     setChats([currentChat]);
@@ -254,8 +252,8 @@ export default function UHCCPortalSupport() {
       currentStep: "initial",
     };
 
-    // Initialize analytics session
-    analyticsTracker.initSession(newChat.id);
+    // Don't initialize session here - wait for actual interaction
+    // analyticsTracker.initSession(newChat.id); // REMOVE THIS
 
     setChats(prev => [newChat, ...prev]);
     setCurrentChat(newChat);
@@ -272,7 +270,11 @@ export default function UHCCPortalSupport() {
   };
 
   const handleQuickAction = (action: QuickAction) => {
-    // Track the quick action click
+    // Force a new session for each quick action click
+    analyticsTracker.reset(); // Clear any existing session
+    analyticsTracker.initSession(Date.now().toString()); // Create fresh session
+
+    // Then track the quick action
     analyticsTracker.trackQuickAction(action.title);
 
     setShowChat(true);
@@ -291,9 +293,13 @@ export default function UHCCPortalSupport() {
     const messageToSend = customMessage || message;
     if (!messageToSend.trim()) return;
 
+    // Ensure session is initialized before tracking messages
+    if (!analyticsTracker.getSessionId()) {
+      analyticsTracker.initSession(currentChat.id);
+    }
+
     // Track message sent
     analyticsTracker.trackMessageSent(messageToSend);
-
     setError(null);
     setRateLimitExpired(false); // Reset rate limit expired state
     setCountdownTime(null); // Reset countdown

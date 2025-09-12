@@ -29,15 +29,28 @@ class AnalyticsTracker {
     return AnalyticsTracker.instance;
   }
 
-  // Initialize a new session
+  // Initialize a new session (only if not already initialized)
   initSession(sessionId?: string): string {
+    // If we already have this session ID, don't reinitialize
+    if (this.sessionId === sessionId && sessionId) {
+      return this.sessionId;
+    }
+
+    // If we already have ANY session, don't create a new one unless explicitly different
+    if (this.sessionId && !sessionId) {
+      return this.sessionId;
+    }
+
     this.sessionId = sessionId || Date.now().toString();
     this.messageCount = 0;
+
+    // Only track session_start for new sessions
     this.trackEvent({
       sessionId: this.sessionId,
       eventType: "session_start",
       eventData: { timestamp: new Date().toISOString() },
     });
+
     return this.sessionId;
   }
 
