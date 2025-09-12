@@ -15,3 +15,37 @@ model Survey {
   
   @@map("surveys")
 }
+
+model Analytics {
+  id                String   @id @default(cuid())
+  sessionId         String   // Unique session identifier
+  eventType         String   // "session_start", "message_sent", "message_received", "option_clicked", etc.
+  eventData         Json?    // Additional data for the event
+  quickActionType   String?  // Which quick action was clicked (if applicable)
+  messageCount      Int      @default(0) // Running count of messages in session
+  timestamp         DateTime @default(now())
+  createdAt         DateTime @default(now())
+  
+  @@index([sessionId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([createdAt])
+  @@map("analytics")
+}
+
+model AnalyticsSummary {
+  id                  String   @id @default(cuid())
+  date                DateTime @db.Date // Summary for specific date
+  totalSessions       Int      @default(0)
+  totalMessages       Int      @default(0)
+  avgMessagesPerSession Float  @default(0)
+  quickActionClicks   Json?    // JSON object with counts per action type
+  uniqueSessions      Int      @default(0)
+  completedSessions   Int      @default(0) // Sessions that reached resolution
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@unique([date])
+  @@index([date])
+  @@map("analytics_summaries")
+}

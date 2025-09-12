@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import FloatingRating from "./components/FloatingRating";
 import TextToSpeech from "./components/TextToSpeech";
+import { analyticsTracker } from "@/app/utils/analyticsTracker";
 
 type MessageImage = {
   id: string;
@@ -212,6 +213,8 @@ export default function UHCCPortalSupport() {
 
   useEffect(() => {
     if (currentChat.messages.length === 0) {
+      // Initialize analytics for new session
+      analyticsTracker.initSession(currentChat.id);
       loadChatHistory(currentChat.id);
     }
     setChats([currentChat]);
@@ -250,14 +253,16 @@ export default function UHCCPortalSupport() {
       createdAt: new Date(),
       currentStep: "initial",
     };
+
+    // Initialize analytics session
+    analyticsTracker.initSession(newChat.id);
+
     setChats(prev => [newChat, ...prev]);
     setCurrentChat(newChat);
     setShowChat(false);
     setSidebarOpen(window.innerWidth >= 768);
     setMessagesSent(0);
     setLatestOptionsMessageIndex(null);
-
-    // Reset survey states
     setShowAutoSurvey(false);
     setSurveyTriggered(false);
   };
@@ -267,18 +272,28 @@ export default function UHCCPortalSupport() {
   };
 
   const handleQuickAction = (action: QuickAction) => {
+    // Track the quick action click
+    analyticsTracker.trackQuickAction(action.title);
+
     setShowChat(true);
-    setSidebarOpen(window.innerWidth >= 768); // Open on desktop, closed on mobile
+    setSidebarOpen(window.innerWidth >= 768);
     setTimeout(() => handleSend(action.action), 100);
   };
 
   const handleOptionSelect = (option: Option) => {
+    // Track option click
+    analyticsTracker.trackOptionClick(option.text);
+
     handleSend(option.action);
   };
 
   const handleSend = async (customMessage?: string) => {
     const messageToSend = customMessage || message;
     if (!messageToSend.trim()) return;
+
+    // Track message sent
+    analyticsTracker.trackMessageSent(messageToSend);
+
     setError(null);
     setRateLimitExpired(false); // Reset rate limit expired state
     setCountdownTime(null); // Reset countdown
@@ -390,6 +405,12 @@ export default function UHCCPortalSupport() {
       }
 
       const data = await response.json();
+
+      // Track message received
+      analyticsTracker.trackMessageReceived(
+        data.message,
+        data.options && data.options.length > 0
+      );
 
       const assistantMessage = {
         role: "assistant" as const,
@@ -687,11 +708,14 @@ export default function UHCCPortalSupport() {
       !surveyTriggered &&
       currentChat.messages.length > 2
     ) {
+      // Track session completed
+      analyticsTracker.trackSessionCompleted();
+
       // Add a small delay so user can read the final message
       const timer = setTimeout(() => {
         setShowAutoSurvey(true);
         setSurveyTriggered(true);
-      }, 2000); // 2 second delay
+      }, 2000);
 
       return () => clearTimeout(timer);
     }
