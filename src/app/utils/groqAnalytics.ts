@@ -1,4 +1,4 @@
-// app/utils/groqAnalytics.ts
+// app/lib/groqAnalytics.ts
 import Groq from "groq-sdk";
 
 const groq = new Groq({
@@ -52,7 +52,9 @@ ${
     .join("\n") || "No events recorded"
 }
 
-Generate a single paragraph summary (4-6 sentences) that highlights the most important insights and trends from this data. Focus on user engagement, support effectiveness, and any notable patterns. Do not use bullet points or numbered lists.`;
+IMPORTANT CONTEXT: A low or zero completion rate doesn't necessarily indicate problems. Users may have found their answer early in the conversation and resolved their issue without needing to complete the full support flow. This is actually a positive sign of efficient problem-solving. Only interpret low completion as negative if paired with very high message counts per session (indicating struggle) or repeat sessions from the same users.
+
+Generate a single paragraph summary (4-6 sentences) that highlights the most important insights and trends from this data. Focus on user engagement, support effectiveness, and any notable patterns. Consider that users leaving early might mean they got their answer quickly. Do not use bullet points or numbered lists.`;
 
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -60,7 +62,7 @@ Generate a single paragraph summary (4-6 sentences) that highlights the most imp
         {
           role: "system",
           content:
-            "You are an analytics expert who provides clear, insightful summaries of support system data. Keep responses concise and focused on actionable insights.",
+            "You are an analytics expert who provides clear, insightful summaries of support system data. Keep responses concise and focused on actionable insights. Remember that in a support context, users finding answers quickly and leaving (resulting in 'incomplete' sessions) can be a positive outcome.",
         },
         {
           role: "user",
@@ -68,7 +70,6 @@ Generate a single paragraph summary (4-6 sentences) that highlights the most imp
         },
       ],
       temperature: 0.7,
-      max_tokens: 300,
     });
 
     return response.choices[0].message.content;
