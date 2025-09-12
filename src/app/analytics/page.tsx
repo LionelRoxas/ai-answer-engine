@@ -667,18 +667,6 @@ export default function AnalyticsPage() {
                   <p className="text-red-700">{error}</p>
                 </div>
               )}
-
-              {/* Data Info */}
-              {data?.rawDataCount !== undefined && (
-                <div className="text-center text-sm text-gray-500 mb-4">
-                  Analyzing {data.rawDataCount} events from {formatDateRange()}
-                  {data?.timezone && (
-                    <span className="ml-2 text-xs text-gray-400">
-                      (Server timezone: {data.timezone})
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
