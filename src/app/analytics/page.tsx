@@ -430,22 +430,24 @@ export default function AnalyticsPage() {
                   <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
                     Event Distribution
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {Object.entries(data.eventTypes).map(([type, count]) => (
-                      <div
-                        key={type}
-                        className="text-center p-3 bg-gray-50 rounded-lg"
-                      >
-                        <p className="text-xs text-gray-600 mb-1">
-                          {type
-                            .replace(/_/g, " ")
-                            .replace(/\b\w/g, l => l.toUpperCase())}
-                        </p>
-                        <p className="text-lg font-bold text-gray-800">
-                          {count}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
+                    {Object.entries(data.eventTypes)
+                      .filter(([type]) => type !== "session_start" && type !== "quick_action_clicked")
+                      .map(([type, count]) => (
+                        <div
+                          key={type}
+                          className="text-center p-3 bg-gray-50 rounded-lg"
+                        >
+                          <p className="text-xs text-gray-600 mb-1">
+                            {type
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, l => l.toUpperCase())}
+                          </p>
+                          <p className="text-lg font-bold text-gray-800">
+                            {count}
+                          </p>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
