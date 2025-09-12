@@ -12,6 +12,7 @@ import {
   Calendar,
   BarChart3,
   Activity,
+  Clock,
 } from "lucide-react";
 
 interface AnalyticsSummary {
@@ -46,10 +47,50 @@ interface AnalyticsData {
   eventTypes: Record<string, number>;
   dailySummaries: DailySummary[];
   rawDataCount?: number;
+  timezone?: string;
+  currentTimeHST?: string;
 }
 
 type FilterType = "day" | "week" | "month" | "year";
 type PeriodType = "current" | "last" | "all";
+
+// Hawaii Standard Time timezone constant
+const HST_TIMEZONE = "Pacific/Honolulu";
+
+// Timezone indicator component showing live HST time
+const TimezoneIndicator = () => {
+  const [currentTime, setCurrentTime] = useState<string>("");
+
+  useEffect(() => {
+    const updateTime = () => {
+      const hstTime = new Date().toLocaleString("en-US", {
+        timeZone: HST_TIMEZONE,
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+      setCurrentTime(hstTime);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+      <div className="flex items-center gap-2 text-sm text-blue-800">
+        <Clock size={16} />
+        <strong>Timezone:</strong> Hawaii Standard Time (HST)
+      </div>
+      <div className="text-sm text-blue-600 font-mono">{currentTime}</div>
+    </div>
+  );
+};
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
@@ -59,6 +100,57 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<PeriodType>("current");
   const [aiSummary, setAiSummary] = useState<string>("");
   const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
+
+  // Format date for display in HST
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        timeZone: HST_TIMEZONE,
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Format date range for display in HST
+  const formatDateRange = (): string => {
+    if (!data?.dateRange) return "";
+
+    try {
+      const startDate = new Date(data.dateRange.start);
+      const endDate = new Date(data.dateRange.end);
+
+      const formatOptions: Intl.DateTimeFormatOptions = {
+        timeZone: HST_TIMEZONE,
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      };
+
+      if (filter === "day" && period === "current") {
+        return `Today (${startDate.toLocaleDateString("en-US", formatOptions)} HST)`;
+      }
+
+      if (filter === "day" && period === "last") {
+        return `Yesterday (${startDate.toLocaleDateString("en-US", formatOptions)} HST)`;
+      }
+
+      const startStr = startDate.toLocaleDateString("en-US", formatOptions);
+      const endStr = endDate.toLocaleDateString("en-US", formatOptions);
+
+      if (startStr === endStr) {
+        return `${startStr} HST`;
+      }
+
+      return `${startStr} - ${endStr} HST`;
+    } catch {
+      return "Date range unavailable";
+    }
+  };
 
   // Generate AI summary for analytics data
   const generateSummary = useCallback(
@@ -102,6 +194,11 @@ export default function AnalyticsPage() {
         const result: AnalyticsData = await response.json();
         setData(result);
 
+        // Log timezone info for debugging
+        if (result.currentTimeHST) {
+          console.log("Server HST time:", result.currentTimeHST);
+        }
+
         // Generate AI summary for the fetched data
         await generateSummary(result);
       } else {
@@ -120,38 +217,6 @@ export default function AnalyticsPage() {
   useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics]);
-
-  // Format date for display
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  // Format date range for display
-  const formatDateRange = (): string => {
-    if (!data?.dateRange) return "";
-
-    try {
-      if (filter === "day" && period === "current") {
-        return `Today (${formatDate(data.dateRange.start)})`;
-      }
-
-      if (filter === "day" && period === "last") {
-        return `Yesterday (${formatDate(data.dateRange.start)})`;
-      }
-
-      return `${formatDate(data.dateRange.start)} - ${formatDate(data.dateRange.end)}`;
-    } catch {
-      return "Date range unavailable";
-    }
-  };
 
   // Campus names for footer
   const campusNames: readonly string[] = [
@@ -236,6 +301,11 @@ export default function AnalyticsPage() {
                   Portal Support Analytics
                 </h2>
 
+                {/* Timezone Indicator */}
+                <div className="mb-4">
+                  <TimezoneIndicator />
+                </div>
+
                 {/* Filter Controls */}
                 <div className="bg-white rounded-lg border border-amber-200 p-4 shadow-sm">
                   <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -259,8 +329,6 @@ export default function AnalyticsPage() {
                         aria-label="Period selection"
                       >
                         <option value="current">Current {filter}</option>
-                        <option value="last">Last {filter}</option>
-                        <option value="all">All time</option>
                       </select>
                     </div>
 
@@ -283,68 +351,71 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-                {/* Summary Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10">
-                  {/* Total Sessions Card */}
-                  <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 hover:border-blue-400 shadow-lg hover:shadow-xl hover:scale-105 group">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-blue-100 p-3 rounded-lg group-hover:bg-blue-200 transition-colors">
-                        <Activity className="text-blue-600" size={24} />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-blue-700 text-sm mb-2 uppercase tracking-wide">
-                          Total Sessions
-                        </h4>
-                        <p className="text-3xl md:text-4xl font-bold text-blue-600 leading-none mb-1">
-                          {data?.summary?.totalSessions ?? 0}
-                        </p>
-                        <p className="text-blue-500/70 text-xs">
-                          Active user sessions
-                        </p>
-                      </div>
+              {/* Summary Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10">
+                {/* Total Sessions Card */}
+                <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 hover:border-blue-400 shadow-lg hover:shadow-xl hover:scale-105 group">
+                  <div className="flex items-start gap-4">
+                    <div className="bg-blue-100 p-3 rounded-lg group-hover:bg-blue-200 transition-colors">
+                      <Activity className="text-blue-600" size={24} />
                     </div>
-                  </div>
-
-                  {/* Messages Exchanged Card */}
-                  <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-green-50 to-green-100/50 border-green-200 hover:border-green-400 shadow-lg hover:shadow-xl hover:scale-105 group">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-green-100 p-3 rounded-lg group-hover:bg-green-200 transition-colors">
-                        <MessageSquare className="text-green-600" size={24} />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-green-700 text-sm mb-2 uppercase tracking-wide">
-                          Messages Exchanged
-                        </h4>
-                        <p className="text-3xl md:text-4xl font-bold text-green-600 leading-none mb-1">
-                          {data?.summary?.totalMessages ?? 0}
-                        </p>
-                        <p className="text-green-500/70 text-xs">
-                          {data?.summary?.avgMessagesPerSession?.toFixed(1) ?? "0.0"} per session
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Completed Sessions Card */}
-                  <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200 hover:border-amber-400 shadow-lg hover:shadow-xl hover:scale-105 group">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-amber-100 p-3 rounded-lg group-hover:bg-amber-200 transition-colors">
-                        <CheckCircle className="text-amber-600" size={24} />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-amber-700 text-sm mb-2 uppercase tracking-wide">
-                          Completed Sessions
-                        </h4>
-                        <p className="text-3xl md:text-4xl font-bold text-amber-600 leading-none mb-1">
-                          {data?.summary?.completedSessions ?? 0}
-                        </p>
-                        <p className="text-amber-500/70 text-xs">
-                          {data?.summary?.completionRate?.toFixed(1) ?? "0.0"}% rate
-                        </p>
-                      </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-blue-700 text-sm mb-2 uppercase tracking-wide">
+                        Total Sessions
+                      </h4>
+                      <p className="text-3xl md:text-4xl font-bold text-blue-600 leading-none mb-1">
+                        {data?.summary?.totalSessions ?? 0}
+                      </p>
+                      <p className="text-blue-500/70 text-xs">
+                        Active user sessions
+                      </p>
                     </div>
                   </div>
                 </div>
+
+                {/* Messages Exchanged Card */}
+                <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-green-50 to-green-100/50 border-green-200 hover:border-green-400 shadow-lg hover:shadow-xl hover:scale-105 group">
+                  <div className="flex items-start gap-4">
+                    <div className="bg-green-100 p-3 rounded-lg group-hover:bg-green-200 transition-colors">
+                      <MessageSquare className="text-green-600" size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-green-700 text-sm mb-2 uppercase tracking-wide">
+                        Messages Exchanged
+                      </h4>
+                      <p className="text-3xl md:text-4xl font-bold text-green-600 leading-none mb-1">
+                        {data?.summary?.totalMessages ?? 0}
+                      </p>
+                      <p className="text-green-500/70 text-xs">
+                        {data?.summary?.avgMessagesPerSession?.toFixed(1) ??
+                          "0.0"}{" "}
+                        per session
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Completed Sessions Card */}
+                <div className="bg-white border-2 rounded-xl p-6 md:p-8 transition-all duration-300 bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200 hover:border-amber-400 shadow-lg hover:shadow-xl hover:scale-105 group">
+                  <div className="flex items-start gap-4">
+                    <div className="bg-amber-100 p-3 rounded-lg group-hover:bg-amber-200 transition-colors">
+                      <CheckCircle className="text-amber-600" size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-amber-700 text-sm mb-2 uppercase tracking-wide">
+                        Completed Sessions
+                      </h4>
+                      <p className="text-3xl md:text-4xl font-bold text-amber-600 leading-none mb-1">
+                        {data?.summary?.completedSessions ?? 0}
+                      </p>
+                      <p className="text-amber-500/70 text-xs">
+                        {data?.summary?.completionRate?.toFixed(1) ?? "0.0"}%
+                        rate
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* Quick Actions Usage */}
               {data?.quickActions &&
@@ -380,7 +451,7 @@ export default function AnalyticsPage() {
               {data?.dailySummaries && data.dailySummaries.length > 0 && (
                 <div className="bg-white rounded-lg border border-amber-200 p-4 md:p-6 shadow-sm mb-6 md:mb-8">
                   <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                    Activity Timeline
+                    Activity Timeline (HST)
                   </h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -432,7 +503,11 @@ export default function AnalyticsPage() {
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
                     {Object.entries(data.eventTypes)
-                      .filter(([type]) => type !== "session_start" && type !== "quick_action_clicked")
+                      .filter(
+                        ([type]) =>
+                          type !== "session_start" &&
+                          type !== "quick_action_clicked"
+                      )
                       .map(([type, count]) => (
                         <div
                           key={type}
@@ -498,6 +573,11 @@ export default function AnalyticsPage() {
               {data?.rawDataCount !== undefined && (
                 <div className="text-center text-sm text-gray-500 mb-4">
                   Analyzing {data.rawDataCount} events from {formatDateRange()}
+                  {data?.timezone && (
+                    <span className="ml-2 text-xs text-gray-400">
+                      (Server timezone: {data.timezone})
+                    </span>
+                  )}
                 </div>
               )}
             </div>

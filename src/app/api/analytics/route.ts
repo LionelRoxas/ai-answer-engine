@@ -15,9 +15,14 @@ import {
   subWeeks,
   subMonths,
   subYears,
+  format,
 } from "date-fns";
+import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 
 const prisma = new PrismaClient();
+
+// Hawaii timezone constant
+const HST_TIMEZONE = "Pacific/Honolulu";
 
 interface AnalyticsEvent {
   sessionId: string;
@@ -38,6 +43,24 @@ export async function POST(request: NextRequest) {
   try {
     const event: AnalyticsEvent = await request.json();
 
+    // Get current time in HST
+    const now = new Date();
+    const nowHST = toZonedTime(now, HST_TIMEZONE);
+
+    // Get start of day in HST, then convert to UTC for storage
+    const todayStartHST = startOfDay(nowHST);
+    const todayStartUTC = fromZonedTime(todayStartHST, HST_TIMEZONE);
+
+    // Log for debugging
+    console.log(`Recording analytics:`);
+    console.log(
+      `  Current HST: ${formatInTimeZone(nowHST, HST_TIMEZONE, "yyyy-MM-dd HH:mm:ss zzz")}`
+    );
+    console.log(
+      `  Today Start HST: ${formatInTimeZone(todayStartHST, HST_TIMEZONE, "yyyy-MM-dd HH:mm:ss zzz")}`
+    );
+    console.log(`  Storing as UTC: ${todayStartUTC.toISOString()}`);
+
     // Record the analytics event
     const result = await prisma.analytics.create({
       data: {
@@ -46,22 +69,22 @@ export async function POST(request: NextRequest) {
         eventData: event.eventData || null,
         quickActionType: event.quickActionType || null,
         messageCount: event.messageCount || 0,
+        timestamp: now, // Store actual timestamp
       },
     });
 
-    // Update or create daily summary
-    const today = startOfDay(new Date());
-
-    // Get current summary for today
+    // Get or create daily summary
     let summary = await prisma.analyticsSummary.findUnique({
-      where: { date: today },
+      where: { date: todayStartUTC },
     });
 
     if (!summary) {
-      // Create new summary for today
+      console.log(
+        `Creating new summary for date: ${todayStartUTC.toISOString()}`
+      );
       summary = await prisma.analyticsSummary.create({
         data: {
-          date: today,
+          date: todayStartUTC,
           totalSessions: 0,
           totalMessages: 0,
           avgMessagesPerSession: 0,
@@ -87,7 +110,6 @@ export async function POST(request: NextRequest) {
       event.eventType === "quick_action_clicked" &&
       event.quickActionType
     ) {
-      // Update quick action clicks
       const currentClicks = (summary.quickActionClicks as any) || {};
       currentClicks[event.quickActionType] =
         (currentClicks[event.quickActionType] || 0) + 1;
@@ -96,10 +118,10 @@ export async function POST(request: NextRequest) {
       updates.completedSessions = { increment: 1 };
     }
 
-    // Calculate average messages per session
+    // Update average messages per session
     if (updates.totalMessages || updates.totalSessions) {
       const updatedSummary = await prisma.analyticsSummary.findUnique({
-        where: { date: today },
+        where: { date: todayStartUTC },
       });
       if (updatedSummary && updatedSummary.totalSessions > 0) {
         updates.avgMessagesPerSession =
@@ -109,7 +131,7 @@ export async function POST(request: NextRequest) {
 
     if (Object.keys(updates).length > 0) {
       await prisma.analyticsSummary.update({
-        where: { date: today },
+        where: { date: todayStartUTC },
         data: updates,
       });
     }
@@ -131,90 +153,124 @@ export async function GET(request: NextRequest) {
       (searchParams.get("filter") as AnalyticsQuery["filter"]) || "day";
     const period =
       (searchParams.get("period") as AnalyticsQuery["period"]) || "current";
-    const startDateParam = searchParams.get("startDate");
-    const endDateParam = searchParams.get("endDate");
 
-    let startDate: Date;
-    let endDate: Date;
+    // Get current time in HST
     const now = new Date();
+    const nowHST = toZonedTime(now, HST_TIMEZONE);
+
+    let startDateHST: Date;
+    let endDateHST: Date;
 
     // Determine date range based on filter and period
-    if (filter === "custom" && startDateParam && endDateParam) {
-      startDate = new Date(startDateParam);
-      endDate = new Date(endDateParam);
-    } else {
-      switch (filter) {
-        case "day":
-          if (period === "current") {
-            startDate = startOfDay(now);
-            endDate = endOfDay(now);
-          } else if (period === "last") {
-            startDate = startOfDay(subDays(now, 1));
-            endDate = endOfDay(subDays(now, 1));
-          } else {
-            startDate = startOfDay(subDays(now, 30)); // Last 30 days
-            endDate = endOfDay(now);
-          }
-          break;
-        case "week":
-          if (period === "current") {
-            startDate = startOfWeek(now);
-            endDate = endOfWeek(now);
-          } else if (period === "last") {
-            startDate = startOfWeek(subWeeks(now, 1));
-            endDate = endOfWeek(subWeeks(now, 1));
-          } else {
-            startDate = startOfWeek(subWeeks(now, 12)); // Last 12 weeks
-            endDate = endOfWeek(now);
-          }
-          break;
-        case "month":
-          if (period === "current") {
-            startDate = startOfMonth(now);
-            endDate = endOfMonth(now);
-          } else if (period === "last") {
-            startDate = startOfMonth(subMonths(now, 1));
-            endDate = endOfMonth(subMonths(now, 1));
-          } else {
-            startDate = startOfMonth(subMonths(now, 12)); // Last 12 months
-            endDate = endOfMonth(now);
-          }
-          break;
-        case "year":
-          if (period === "current") {
-            startDate = startOfYear(now);
-            endDate = endOfYear(now);
-          } else if (period === "last") {
-            startDate = startOfYear(subYears(now, 1));
-            endDate = endOfYear(subYears(now, 1));
-          } else {
-            startDate = startOfYear(subYears(now, 5)); // Last 5 years
-            endDate = endOfYear(now);
-          }
-          break;
-        default:
-          startDate = startOfDay(now);
-          endDate = endOfDay(now);
-      }
+    switch (filter) {
+      case "day":
+        if (period === "current") {
+          // Today
+          startDateHST = startOfDay(nowHST);
+          endDateHST = endOfDay(nowHST);
+        } else if (period === "last") {
+          // Yesterday
+          const yesterdayHST = subDays(nowHST, 1);
+          startDateHST = startOfDay(yesterdayHST);
+          endDateHST = endOfDay(yesterdayHST);
+        } else {
+          // All time (last 30 days)
+          const thirtyDaysAgoHST = subDays(nowHST, 30);
+          startDateHST = startOfDay(thirtyDaysAgoHST);
+          endDateHST = endOfDay(nowHST);
+        }
+        break;
+      case "week":
+        if (period === "current") {
+          startDateHST = startOfWeek(nowHST);
+          endDateHST = endOfWeek(nowHST);
+        } else if (period === "last") {
+          const lastWeekHST = subWeeks(nowHST, 1);
+          startDateHST = startOfWeek(lastWeekHST);
+          endDateHST = endOfWeek(lastWeekHST);
+        } else {
+          const twelveWeeksAgoHST = subWeeks(nowHST, 12);
+          startDateHST = startOfWeek(twelveWeeksAgoHST);
+          endDateHST = endOfWeek(nowHST);
+        }
+        break;
+      case "month":
+        if (period === "current") {
+          startDateHST = startOfMonth(nowHST);
+          endDateHST = endOfMonth(nowHST);
+        } else if (period === "last") {
+          const lastMonthHST = subMonths(nowHST, 1);
+          startDateHST = startOfMonth(lastMonthHST);
+          endDateHST = endOfMonth(lastMonthHST);
+        } else {
+          const twelveMonthsAgoHST = subMonths(nowHST, 12);
+          startDateHST = startOfMonth(twelveMonthsAgoHST);
+          endDateHST = endOfMonth(nowHST);
+        }
+        break;
+      case "year":
+        if (period === "current") {
+          startDateHST = startOfYear(nowHST);
+          endDateHST = endOfYear(nowHST);
+        } else if (period === "last") {
+          const lastYearHST = subYears(nowHST, 1);
+          startDateHST = startOfYear(lastYearHST);
+          endDateHST = endOfYear(lastYearHST);
+        } else {
+          const fiveYearsAgoHST = subYears(nowHST, 5);
+          startDateHST = startOfYear(fiveYearsAgoHST);
+          endDateHST = endOfYear(nowHST);
+        }
+        break;
+      default:
+        startDateHST = startOfDay(nowHST);
+        endDateHST = endOfDay(nowHST);
     }
+
+    // Convert HST dates to UTC for database query
+    const startDateUTC = fromZonedTime(startDateHST, HST_TIMEZONE);
+    const endDateUTC = fromZonedTime(endDateHST, HST_TIMEZONE);
+
+    // Log for debugging
+    console.log(`\n=== Analytics Query Debug ===`);
+    console.log(`Filter: ${filter}, Period: ${period}`);
+    console.log(
+      `Current HST: ${formatInTimeZone(nowHST, HST_TIMEZONE, "yyyy-MM-dd HH:mm:ss zzz")}`
+    );
+    console.log(
+      `Start HST: ${formatInTimeZone(startDateHST, HST_TIMEZONE, "yyyy-MM-dd HH:mm:ss zzz")}`
+    );
+    console.log(
+      `End HST: ${formatInTimeZone(endDateHST, HST_TIMEZONE, "yyyy-MM-dd HH:mm:ss zzz")}`
+    );
+    console.log(`Start UTC: ${startDateUTC.toISOString()}`);
+    console.log(`End UTC: ${endDateUTC.toISOString()}`);
 
     // Fetch analytics summaries
     const summaries = await prisma.analyticsSummary.findMany({
       where: {
         date: {
-          gte: startDate,
-          lte: endDate,
+          gte: startDateUTC,
+          lte: endDateUTC,
         },
       },
       orderBy: { date: "asc" },
     });
 
-    // Fetch raw analytics data for more detailed metrics
+    console.log(`Found ${summaries.length} summaries`);
+    summaries.forEach(s => {
+      const summaryHST = toZonedTime(s.date, HST_TIMEZONE);
+      console.log(
+        `  - ${format(summaryHST, "yyyy-MM-dd")} HST: ${s.totalSessions} sessions, ${s.totalMessages} messages`
+      );
+    });
+
+    // Fetch raw analytics data
     const rawAnalytics = await prisma.analytics.findMany({
       where: {
         timestamp: {
-          gte: startDate,
-          lte: endDate,
+          gte: startDateUTC,
+          lte: endDateUTC,
         },
       },
       orderBy: { timestamp: "asc" },
@@ -260,8 +316,8 @@ export async function GET(request: NextRequest) {
 
     const response = {
       dateRange: {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
+        start: startDateUTC.toISOString(),
+        end: endDateUTC.toISOString(),
       },
       summary: {
         totalSessions,
@@ -275,6 +331,12 @@ export async function GET(request: NextRequest) {
       eventTypes: eventTypeCounts,
       dailySummaries: summaries,
       rawDataCount: rawAnalytics.length,
+      timezone: HST_TIMEZONE,
+      currentTimeHST: formatInTimeZone(
+        nowHST,
+        HST_TIMEZONE,
+        "yyyy-MM-dd HH:mm:ss zzz"
+      ),
     };
 
     return NextResponse.json(response);

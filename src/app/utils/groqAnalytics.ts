@@ -22,15 +22,34 @@ interface AnalyticsSummaryData {
   eventTypes: Record<string, number>;
 }
 
+// Helper function to format dates in HST
+function formatDateHST(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      timeZone: "Pacific/Honolulu",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return dateString;
+  }
+}
+
 export async function generateAnalyticsSummary(
   data: AnalyticsSummaryData
 ): Promise<string | null> {
   try {
+    // Format dates in HST for the AI summary
+    const startDateHST = formatDateHST(data.dateRange.start);
+    const endDateHST = formatDateHST(data.dateRange.end);
+
     const prompt = `
 You are an analytics expert for a university portal support system. Generate a concise, insightful one-paragraph summary of the following analytics data. Focus on key trends, notable patterns, and actionable insights. Keep the tone professional but accessible.
 
 Analytics Data:
-- Date Range: ${new Date(data.dateRange.start).toLocaleDateString()} to ${new Date(data.dateRange.end).toLocaleDateString()}
+- Date Range: ${startDateHST} to ${endDateHST} (Hawaii Standard Time)
 - Total Sessions: ${data.summary.totalSessions}
 - Unique Sessions: ${data.summary.uniqueSessions}
 - Total Messages Exchanged: ${data.summary.totalMessages}
@@ -62,7 +81,7 @@ Generate a single paragraph summary (4-6 sentences) that highlights the most imp
         {
           role: "system",
           content:
-            "You are an analytics expert who provides clear, insightful summaries of support system data. Keep responses concise and focused on actionable insights. Remember that in a support context, users finding answers quickly and leaving (resulting in 'incomplete' sessions) can be a positive outcome.",
+            "You are an analytics expert who provides clear, insightful summaries of support system data. Keep responses concise and focused on actionable insights. Remember that in a support context, users finding answers quickly and leaving (resulting in 'incomplete' sessions) can be a positive outcome. All dates and times mentioned are in Hawaii Standard Time (HST).",
         },
         {
           role: "user",

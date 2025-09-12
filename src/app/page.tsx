@@ -557,6 +557,20 @@ export default function UHCCPortalSupport() {
     setSidebarOpen(false); // Close sidebar when selecting chat on mobile
   };
 
+  const formatDateHST = (date: Date | string): string => {
+    try {
+      const dateObj = typeof date === "string" ? new Date(date) : date;
+      return dateObj.toLocaleDateString("en-US", {
+        timeZone: "Pacific/Honolulu",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return "Invalid date";
+    }
+  };
+
   // Function to toggle sidebar and handle desktop layout
   const toggleSidebar = () => {
     if (window.innerWidth >= 768) {
@@ -921,7 +935,7 @@ export default function UHCCPortalSupport() {
                     {chat.title}
                   </h4>
                   <p className="text-xs text-gray-500 mt-1">
-                    {new Date(chat.createdAt).toLocaleDateString()}
+                    {formatDateHST(chat.createdAt)}
                   </p>
                 </button>
               ))}
