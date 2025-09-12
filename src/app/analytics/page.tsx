@@ -52,10 +52,32 @@ interface AnalyticsData {
 }
 
 type FilterType = "day" | "week" | "month" | "year";
-type PeriodType = "current" | "last" | "all";
 
 // Hawaii Standard Time timezone constant
 const HST_TIMEZONE = "Pacific/Honolulu";
+
+// Get current year for year filter
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from(
+  { length: currentYear - 2024 + 1 },
+  (_, i) => 2024 + i
+);
+
+// Month options
+const monthOptions = [
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
+  { value: 4, label: "April" },
+  { value: 5, label: "May" },
+  { value: 6, label: "June" },
+  { value: 7, label: "July" },
+  { value: 8, label: "August" },
+  { value: 9, label: "September" },
+  { value: 10, label: "October" },
+  { value: 11, label: "November" },
+  { value: 12, label: "December" },
+];
 
 // Timezone indicator component showing live HST time
 const TimezoneIndicator = () => {
@@ -97,7 +119,11 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("day");
-  const [period, setPeriod] = useState<PeriodType>("current");
+  const [weekPeriod, setWeekPeriod] = useState<"current" | "last">("current");
+  const [selectedMonth, setSelectedMonth] = useState<number>(
+    new Date().getMonth() + 1
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [aiSummary, setAiSummary] = useState<string>("");
   const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
 
@@ -131,12 +157,25 @@ export default function AnalyticsPage() {
         day: "numeric",
       };
 
-      if (filter === "day" && period === "current") {
+      if (filter === "day") {
         return `Today (${startDate.toLocaleDateString("en-US", formatOptions)} HST)`;
       }
 
-      if (filter === "day" && period === "last") {
-        return `Yesterday (${startDate.toLocaleDateString("en-US", formatOptions)} HST)`;
+      if (filter === "week") {
+        const weekLabel =
+          weekPeriod === "current" ? "Current Week" : "Last Week";
+        return `${weekLabel}: ${startDate.toLocaleDateString("en-US", formatOptions)} - ${endDate.toLocaleDateString("en-US", formatOptions)} HST`;
+      }
+
+      if (filter === "month") {
+        const monthName = monthOptions.find(
+          m => m.value === selectedMonth
+        )?.label;
+        return `${monthName} ${new Date(data.dateRange.start).getFullYear()} HST`;
+      }
+
+      if (filter === "year") {
+        return `Year ${selectedYear} HST`;
       }
 
       const startStr = startDate.toLocaleDateString("en-US", formatOptions);
@@ -180,15 +219,31 @@ export default function AnalyticsPage() {
     []
   );
 
+  // Build query parameters based on filter selection
+  const buildQueryParams = useCallback((): string => {
+    const params = new URLSearchParams();
+    params.append("filter", filter);
+
+    if (filter === "week") {
+      params.append("weekPeriod", weekPeriod);
+    } else if (filter === "month") {
+      params.append("month", selectedMonth.toString());
+      params.append("year", new Date().getFullYear().toString()); // Current year for month
+    } else if (filter === "year") {
+      params.append("year", selectedYear.toString());
+    }
+
+    return params.toString();
+  }, [filter, weekPeriod, selectedMonth, selectedYear]);
+
   // Fetch analytics data based on filters
   const fetchAnalytics = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        `/api/analytics?filter=${filter}&period=${period}`
-      );
+      const queryParams = buildQueryParams();
+      const response = await fetch(`/api/analytics?${queryParams}`);
 
       if (response.ok) {
         const result: AnalyticsData = await response.json();
@@ -211,7 +266,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, period, generateSummary]);
+  }, [buildQueryParams, generateSummary]);
 
   // Fetch analytics when filter or period changes
   useEffect(() => {
@@ -309,27 +364,70 @@ export default function AnalyticsPage() {
                 {/* Filter Controls */}
                 <div className="bg-white rounded-lg border border-amber-200 p-4 shadow-sm">
                   <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {/* Main filter type */}
                       <select
                         value={filter}
                         onChange={e => setFilter(e.target.value as FilterType)}
                         className="px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
                         aria-label="Time period filter"
                       >
-                        <option value="day">Daily</option>
+                        <option value="day">Today</option>
                         <option value="week">Weekly</option>
                         <option value="month">Monthly</option>
                         <option value="year">Yearly</option>
                       </select>
 
-                      <select
-                        value={period}
-                        onChange={e => setPeriod(e.target.value as PeriodType)}
-                        className="px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
-                        aria-label="Period selection"
-                      >
-                        <option value="current">Current {filter}</option>
-                      </select>
+                      {/* Week-specific filter */}
+                      {filter === "week" && (
+                        <select
+                          value={weekPeriod}
+                          onChange={e =>
+                            setWeekPeriod(e.target.value as "current" | "last")
+                          }
+                          className="px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                          aria-label="Week selection"
+                        >
+                          <option value="current">Current Week</option>
+                          <option value="last">Last Week</option>
+                        </select>
+                      )}
+
+                      {/* Month-specific filter */}
+                      {filter === "month" && (
+                        <select
+                          value={selectedMonth}
+                          onChange={e =>
+                            setSelectedMonth(Number(e.target.value))
+                          }
+                          className="px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                          aria-label="Month selection"
+                        >
+                          {monthOptions.map(month => (
+                            <option key={month.value} value={month.value}>
+                              {month.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Year-specific filter */}
+                      {filter === "year" && (
+                        <select
+                          value={selectedYear}
+                          onChange={e =>
+                            setSelectedYear(Number(e.target.value))
+                          }
+                          className="px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                          aria-label="Year selection"
+                        >
+                          {yearOptions.map(year => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -506,7 +604,8 @@ export default function AnalyticsPage() {
                       .filter(
                         ([type]) =>
                           type !== "session_start" &&
-                          type !== "quick_action_clicked"
+                          type !== "quick_action_clicked" &&
+                          type !== "session_completed"
                       )
                       .map(([type, count]) => (
                         <div
