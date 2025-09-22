@@ -22,12 +22,30 @@ interface AnalyticsSummaryData {
   eventTypes: Record<string, number>;
 }
 
+// Helper function to get current date in HST
+function getCurrentDateHST(): string {
+  return new Date().toLocaleDateString("en-US", {
+    timeZone: "Pacific/Honolulu",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 // Helper function to format dates in HST
 function formatDateHST(dateString: string): string {
   try {
     const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      timeZone: "Pacific/Honolulu",
+
+    // Use UTC parts directly since the date was stored as UTC representing HST
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const day = date.getUTCDate();
+
+    // Create a new date with these parts for formatting
+    const displayDate = new Date(year, month, day);
+
+    return displayDate.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -37,19 +55,51 @@ function formatDateHST(dateString: string): string {
   }
 }
 
+// Helper to check if date range is for today
+function isToday(startDate: string, endDate: string): boolean {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  // Check if it's a single day range (start and end are on the same day)
+  const startDay = start.getUTCDate();
+  const endDay = end.getUTCDate();
+  const startMonth = start.getUTCMonth();
+  const endMonth = end.getUTCMonth();
+  const startYear = start.getUTCFullYear();
+  const endYear = end.getUTCFullYear();
+
+  return (
+    startDay === endDay && startMonth === endMonth && startYear === endYear
+  );
+}
+
 export async function generateAnalyticsSummary(
   data: AnalyticsSummaryData
 ): Promise<string | null> {
   try {
-    // Format dates in HST for the AI summary
-    const startDateHST = formatDateHST(data.dateRange.start);
-    const endDateHST = formatDateHST(data.dateRange.end);
+    // Determine if this is "Today" data and format dates accordingly
+    let dateRangeText: string;
+
+    if (isToday(data.dateRange.start, data.dateRange.end)) {
+      // For "Today", use the actual current date in HST
+      dateRangeText = `Today (${getCurrentDateHST()}) - Hawaii Standard Time`;
+    } else {
+      // For other ranges, format the provided dates
+      const startDateHST = formatDateHST(data.dateRange.start);
+      const endDateHST = formatDateHST(data.dateRange.end);
+
+      if (startDateHST === endDateHST) {
+        dateRangeText = `${startDateHST} (Hawaii Standard Time)`;
+      } else {
+        dateRangeText = `${startDateHST} to ${endDateHST} (Hawaii Standard Time)`;
+      }
+    }
 
     const prompt = `
 You are an analytics expert for a university portal support system. Generate a concise, insightful one-paragraph summary of the following analytics data. Focus on key trends, notable patterns, and actionable insights. Keep the tone professional but accessible.
 
 Analytics Data:
-- Date Range: ${startDateHST} to ${endDateHST} (Hawaii Standard Time)
+- Date Range: ${dateRangeText}.
 - Total Sessions: ${data.summary.totalSessions}
 - Unique Sessions: ${data.summary.uniqueSessions}
 - Total Messages Exchanged: ${data.summary.totalMessages}
