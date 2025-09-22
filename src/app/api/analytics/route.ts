@@ -13,13 +13,29 @@ import {
   endOfYear,
   subWeeks,
 } from "date-fns";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 const HST_TIMEZONE = "Pacific/Honolulu";
-const nowHST = new Date(
-  new Date().toLocaleString("en-US", { timeZone: HST_TIMEZONE })
-);
-
 const prisma = new PrismaClient();
+
+// Helper function to get current time in HST
+function getNowInHST(): Date {
+  return toZonedTime(new Date(), HST_TIMEZONE);
+}
+
+// Helper function to get start of day in HST
+function getStartOfDayHST(date: Date = new Date()): Date {
+  const hstDate = toZonedTime(date, HST_TIMEZONE);
+  const startOfDayHST = startOfDay(hstDate);
+  return fromZonedTime(startOfDayHST, HST_TIMEZONE);
+}
+
+// Helper function to get end of day in HST
+function getEndOfDayHST(date: Date = new Date()): Date {
+  const hstDate = toZonedTime(date, HST_TIMEZONE);
+  const endOfDayHST = endOfDay(hstDate);
+  return fromZonedTime(endOfDayHST, HST_TIMEZONE);
+}
 
 interface AnalyticsEvent {
   sessionId: string;
@@ -44,19 +60,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update or create daily summary
-    const today = startOfDay(new Date());
+    // Update or create daily summary - using HST timezone
+    const todayHST = getStartOfDayHST();
 
     // Get current summary for today
     let summary = await prisma.analyticsSummary.findUnique({
-      where: { date: today },
+      where: { date: todayHST },
     });
 
     if (!summary) {
       // Create new summary for today
       summary = await prisma.analyticsSummary.create({
         data: {
-          date: today,
+          date: todayHST,
           totalSessions: 0,
           totalMessages: 0,
           avgMessagesPerSession: 0,
@@ -94,7 +110,7 @@ export async function POST(request: NextRequest) {
     // Calculate average messages per session
     if (updates.totalMessages || updates.totalSessions) {
       const updatedSummary = await prisma.analyticsSummary.findUnique({
-        where: { date: today },
+        where: { date: todayHST },
       });
       if (updatedSummary && updatedSummary.totalSessions > 0) {
         updates.avgMessagesPerSession =
@@ -104,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     if (Object.keys(updates).length > 0) {
       await prisma.analyticsSummary.update({
-        where: { date: today },
+        where: { date: todayHST },
         data: updates,
       });
     }
@@ -129,48 +145,60 @@ export async function GET(request: NextRequest) {
 
     let startDate: Date;
     let endDate: Date;
-    const now = new Date();
 
-    // Determine date range based on filter
+    // Get current time in HST
+    const nowHST = getNowInHST();
+
+    // Determine date range based on filter - all in HST
     switch (filter) {
       case "day":
-        // Only current day
-        startDate = startOfDay(now);
-        endDate = endOfDay(now);
+        // Only current day in HST
+        startDate = getStartOfDayHST(nowHST);
+        endDate = getEndOfDayHST(nowHST);
         break;
 
       case "week":
-        // Current week or last week
+        // Current week or last week in HST
         if (weekPeriod === "current") {
-          startDate = startOfWeek(now, { weekStartsOn: 0 }); // Sunday
-          endDate = endOfWeek(now, { weekStartsOn: 0 });
+          const weekStartHST = startOfWeek(nowHST, { weekStartsOn: 0 }); // Sunday
+          const weekEndHST = endOfWeek(nowHST, { weekStartsOn: 0 });
+          startDate = fromZonedTime(weekStartHST, HST_TIMEZONE);
+          endDate = fromZonedTime(weekEndHST, HST_TIMEZONE);
         } else {
           // Last week
-          const lastWeek = subWeeks(now, 1);
-          startDate = startOfWeek(lastWeek, { weekStartsOn: 0 });
-          endDate = endOfWeek(lastWeek, { weekStartsOn: 0 });
+          const lastWeekHST = subWeeks(nowHST, 1);
+          const weekStartHST = startOfWeek(lastWeekHST, { weekStartsOn: 0 });
+          const weekEndHST = endOfWeek(lastWeekHST, { weekStartsOn: 0 });
+          startDate = fromZonedTime(weekStartHST, HST_TIMEZONE);
+          endDate = fromZonedTime(weekEndHST, HST_TIMEZONE);
         }
         break;
 
       case "month":
-        // Specific month (current year by default)
-        const selectedMonth = month ? parseInt(month) - 1 : now.getMonth();
-        const selectedYear = year ? parseInt(year) : now.getFullYear();
-        startDate = startOfMonth(new Date(selectedYear, selectedMonth));
-        endDate = endOfMonth(new Date(selectedYear, selectedMonth));
+        // Specific month in HST
+        const selectedMonth = month ? parseInt(month) - 1 : nowHST.getMonth();
+        const selectedYear = year ? parseInt(year) : nowHST.getFullYear();
+        const monthDateHST = new Date(selectedYear, selectedMonth, 1);
+        const monthStartHST = startOfMonth(monthDateHST);
+        const monthEndHST = endOfMonth(monthDateHST);
+        startDate = fromZonedTime(monthStartHST, HST_TIMEZONE);
+        endDate = fromZonedTime(monthEndHST, HST_TIMEZONE);
         break;
 
       case "year":
-        // Specific year
-        const yearValue = year ? parseInt(year) : now.getFullYear();
-        startDate = startOfYear(new Date(yearValue, 0));
-        endDate = endOfYear(new Date(yearValue, 11));
+        // Specific year in HST
+        const yearValue = year ? parseInt(year) : nowHST.getFullYear();
+        const yearDateHST = new Date(yearValue, 0, 1);
+        const yearStartHST = startOfYear(yearDateHST);
+        const yearEndHST = endOfYear(new Date(yearValue, 11, 31));
+        startDate = fromZonedTime(yearStartHST, HST_TIMEZONE);
+        endDate = fromZonedTime(yearEndHST, HST_TIMEZONE);
         break;
 
       default:
-        // Default to current day
-        startDate = startOfDay(now);
-        endDate = endOfDay(now);
+        // Default to current day in HST
+        startDate = getStartOfDayHST(nowHST);
+        endDate = getEndOfDayHST(nowHST);
     }
 
     // Fetch analytics summaries
@@ -247,7 +275,7 @@ export async function GET(request: NextRequest) {
 
     const response = {
       dateRange: {
-        start: startDate.toISOString(), // Send back the HST dates for display
+        start: startDate.toISOString(),
         end: endDate.toISOString(),
       },
       summary: {

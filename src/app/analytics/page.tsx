@@ -131,8 +131,21 @@ export default function AnalyticsPage() {
   const formatDate = (dateString: string): string => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", {
-        timeZone: HST_TIMEZONE,
+
+      // The date from the database is in UTC but represents a day in HST
+      // We need to display the UTC date parts directly, not convert to HST
+      // because the conversion was already done when storing
+
+      // Use UTC methods to get the date parts that were stored
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth(); // 0-indexed
+      const day = date.getUTCDate();
+
+      // Create a new date with these parts (in local time for formatting)
+      const displayDate = new Date(year, month, day);
+
+      // Format it without timezone conversion
+      return displayDate.toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
