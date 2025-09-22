@@ -171,7 +171,7 @@ export default function AnalyticsPage() {
       };
 
       if (filter === "day") {
-        return `Today (${startDate.toLocaleDateString("en-US", formatOptions)} HST)`;
+        return `Today: ${formatDate(startDate.toISOString())} HST`;
       }
 
       if (filter === "week") {
