@@ -24,21 +24,16 @@ interface AnalyticsSummaryData {
 // Helper function to format dates in HST
 function formatDateHST(dateString: string): string {
   try {
+    const HST_TIMEZONE = "Pacific/Honolulu";
     const date = new Date(dateString);
-
-    // Use UTC parts directly since the date was stored as UTC representing HST
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const day = date.getUTCDate();
-
-    // Create a new date with these parts for formatting
-    const displayDate = new Date(year, month, day);
-
-    return displayDate.toLocaleDateString("en-US", {
+    const displayDate = new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
-    });
+      timeZone: HST_TIMEZONE,
+    }).format(date);
+
+    return displayDate;
   } catch {
     return dateString;
   }
