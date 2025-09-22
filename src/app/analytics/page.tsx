@@ -219,10 +219,16 @@ export default function AnalyticsPage() {
         setSummaryLoading(true);
         setAiSummary("");
 
+        // Pass the filter type along with the analytics data
+        const requestData = {
+          ...analyticsData,
+          filter: filter, // Add the current filter type
+        };
+
         const response = await fetch("/api/analytics/summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(analyticsData),
+          body: JSON.stringify(requestData),
         });
 
         if (response.ok) {
@@ -237,7 +243,7 @@ export default function AnalyticsPage() {
         setSummaryLoading(false);
       }
     },
-    []
+    [filter] // Add filter as dependency
   );
 
   // Build query parameters based on filter selection

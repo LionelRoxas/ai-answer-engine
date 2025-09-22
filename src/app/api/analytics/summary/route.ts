@@ -1,12 +1,15 @@
-// app/api/analytics/summary/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { generateAnalyticsSummary } from "@/app/utils/groqAnalytics";
 
 export async function POST(request: NextRequest) {
   try {
-    const analyticsData = await request.json();
+    const data = await request.json();
+    
+    // Extract filter type from request
+    const { filter, ...analyticsData } = data;
 
-    const summary = await generateAnalyticsSummary(analyticsData);
+    // Pass both analytics data and filter type
+    const summary = await generateAnalyticsSummary(analyticsData, filter);
 
     if (!summary) {
       return NextResponse.json(

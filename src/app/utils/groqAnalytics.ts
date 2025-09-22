@@ -1,4 +1,3 @@
-// app/lib/groqAnalytics.ts
 import Groq from "groq-sdk";
 
 const groq = new Groq({
@@ -20,16 +19,6 @@ interface AnalyticsSummaryData {
   };
   quickActions: Record<string, number>;
   eventTypes: Record<string, number>;
-}
-
-// Helper function to get current date in HST
-function getCurrentDateHST(): string {
-  return new Date().toLocaleDateString("en-US", {
-    timeZone: "Pacific/Honolulu",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 // Helper function to format dates in HST
@@ -55,36 +44,19 @@ function formatDateHST(dateString: string): string {
   }
 }
 
-// Helper to check if date range is for today
-function isToday(startDate: string, endDate: string): boolean {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  // Check if it's a single day range (start and end are on the same day)
-  const startDay = start.getUTCDate();
-  const endDay = end.getUTCDate();
-  const startMonth = start.getUTCMonth();
-  const endMonth = end.getUTCMonth();
-  const startYear = start.getUTCFullYear();
-  const endYear = end.getUTCFullYear();
-
-  return (
-    startDay === endDay && startMonth === endMonth && startYear === endYear
-  );
-}
-
 export async function generateAnalyticsSummary(
-  data: AnalyticsSummaryData
+  data: AnalyticsSummaryData,
+  filter?: string // Accept filter type
 ): Promise<string | null> {
   try {
-    // Determine if this is "Today" data and format dates accordingly
+    // Determine date range text based on filter type
     let dateRangeText: string;
 
-    if (isToday(data.dateRange.start, data.dateRange.end)) {
-      // For "Today", use the actual current date in HST
-      dateRangeText = `Today (${getCurrentDateHST()}) - Hawaii Standard Time`;
+    if (filter === "day") {
+      // For "Today" filter, just use "Today"
+      dateRangeText = "Today";
     } else {
-      // For other ranges, format the provided dates
+      // For all other filters, format the actual dates
       const startDateHST = formatDateHST(data.dateRange.start);
       const endDateHST = formatDateHST(data.dateRange.end);
 
@@ -99,7 +71,7 @@ export async function generateAnalyticsSummary(
 You are an analytics expert for a university portal support system. Generate a concise, insightful one-paragraph summary of the following analytics data. Focus on key trends, notable patterns, and actionable insights. Keep the tone professional but accessible.
 
 Analytics Data:
-- Date Range: ${dateRangeText}.
+- Date Range: ${dateRangeText}
 - Total Sessions: ${data.summary.totalSessions}
 - Unique Sessions: ${data.summary.uniqueSessions}
 - Total Messages Exchanged: ${data.summary.totalMessages}
@@ -121,7 +93,10 @@ ${
     .join("\n") || "No events recorded"
 }
 
-IMPORTANT CONTEXT: A low or zero completion rate doesn't necessarily indicate problems. Users may have found their answer early in the conversation and resolved their issue without needing to complete the full support flow. This is actually a positive sign of efficient problem-solving. Only interpret low completion as negative if paired with very high message counts per session (indicating struggle) or repeat sessions from the same users.
+IMPORTANT CONTEXT: 
+- When the date range is "Today", it refers to the current day in Hawaii Standard Time.
+- A low or zero completion rate doesn't necessarily indicate problems. Users may have found their answer early in the conversation and resolved their issue without needing to complete the full support flow. This is actually a positive sign of efficient problem-solving. 
+- Only interpret low completion as negative if paired with very high message counts per session (indicating struggle) or repeat sessions from the same users.
 
 Generate a single paragraph summary (4-6 sentences) that highlights the most important insights and trends from this data. Focus on user engagement, support effectiveness, and any notable patterns. Consider that users leaving early might mean they got their answer quickly. Do not use bullet points or numbered lists.`;
 
