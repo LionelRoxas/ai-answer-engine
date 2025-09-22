@@ -160,6 +160,18 @@ export default function AnalyticsPage() {
     if (!data?.dateRange) return "";
 
     try {
+      if (filter === "day") {
+        // Get the actual current date in HST, just like TimezoneIndicator does
+        const nowHST = new Date().toLocaleString("en-US", {
+          timeZone: HST_TIMEZONE,
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+        return `Today (${nowHST} HST)`;
+      }
+
+      // For other filters, use the date range from data
       const startDate = new Date(data.dateRange.start);
       const endDate = new Date(data.dateRange.end);
 
@@ -169,10 +181,6 @@ export default function AnalyticsPage() {
         month: "short",
         day: "numeric",
       };
-
-      if (filter === "day") {
-        return `Today: ${formatDate(startDate.toISOString())} HST`;
-      }
 
       if (filter === "week") {
         const weekLabel =
